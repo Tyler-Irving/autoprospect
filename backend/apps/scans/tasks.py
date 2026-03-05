@@ -1,9 +1,11 @@
 """Scan orchestrator Celery task — Phase 2: discovery + enrichment."""
 import logging
+from datetime import timedelta
 from typing import Any
 
 from celery import chord, shared_task
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.businesses.models import Business
@@ -12,6 +14,8 @@ from apps.businesses.services.google_places import GooglePlacesService
 from .models import Scan
 
 logger = logging.getLogger(__name__)
+
+ENRICHMENT_CACHE_DAYS = 3
 
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=30)
@@ -41,13 +45,31 @@ def run_scan(self, scan_id: int) -> dict[str, Any]:
         # chord(score group, finalize_scan.s(scan_id))
         from apps.enrichment.tasks import enrich_business
 
+        to_enrich = _filter_needs_enrichment(business_ids)
+        skipped = len(business_ids) - len(to_enrich)
+
         scan.status = Scan.Status.ENRICHING_T1
         scan.save(update_fields=["status", "updated_at"])
 
-        chord(
-            (enrich_business.s(biz_id) for biz_id in business_ids),
-            start_scoring.s(scan_id, business_ids),
-        ).delay()
+        if skipped:
+            logger.info(
+                "Scan %d: skipping enrichment for %d recently-enriched businesses",
+                scan_id, skipped,
+            )
+            # Credit skipped businesses so the progress bar reflects reality.
+            Scan.objects.filter(pk=scan_id).update(
+                businesses_enriched=F("businesses_enriched") + skipped,
+                updated_at=timezone.now(),
+            )
+
+        if to_enrich:
+            chord(
+                (enrich_business.s(biz_id) for biz_id in to_enrich),
+                start_scoring.s(scan_id, business_ids, to_enrich),
+            ).delay()
+        else:
+            # All businesses were recently enriched — skip straight to scoring.
+            start_scoring.apply_async(args=([], scan_id, business_ids, []))
 
         return {"scan_id": scan_id, "businesses_found": len(business_ids)}
 
@@ -60,13 +82,21 @@ def run_scan(self, scan_id: int) -> dict[str, Any]:
 
 
 @shared_task(bind=True)
-def start_scoring(self, _enrich_results: list, scan_id: int, business_ids: list[int]) -> dict[str, Any]:
+def start_scoring(
+    self,
+    _enrich_results: list,
+    scan_id: int,
+    business_ids: list[int],
+    freshly_enriched_ids: list[int] | None = None,
+) -> dict[str, Any]:
     """Chord callback after all enrichment tasks complete — kicks off Tier 1 scoring.
 
     Args:
         _enrich_results: Passed by chord (enrichment results, ignored).
         scan_id: Primary key of the Scan.
-        business_ids: List of Business PKs to score.
+        business_ids: All Business PKs discovered in this scan.
+        freshly_enriched_ids: PKs that were re-enriched this run — always re-scored
+            regardless of the scoring cache.
     """
     try:
         scan = Scan.objects.get(pk=scan_id)
@@ -75,15 +105,31 @@ def start_scoring(self, _enrich_results: list, scan_id: int, business_ids: list[
 
     from apps.scoring.tasks import score_business_tier1
 
+    to_score = _filter_needs_scoring(business_ids, force_rescore=set(freshly_enriched_ids or []))
+    skipped = len(business_ids) - len(to_score)
+
     scan.status = Scan.Status.SCORING_T1
     scan.save(update_fields=["status", "updated_at"])
 
-    chord(
-        (score_business_tier1.s(biz_id) for biz_id in business_ids),
-        finalize_scan.s(scan_id),
-    ).delay()
+    if skipped:
+        logger.info(
+            "Scan %d: skipping scoring for %d recently-scored businesses",
+            scan_id, skipped,
+        )
+        Scan.objects.filter(pk=scan_id).update(
+            businesses_scored=F("businesses_scored") + skipped,
+            updated_at=timezone.now(),
+        )
 
-    return {"scan_id": scan_id, "scoring_started": len(business_ids)}
+    if to_score:
+        chord(
+            (score_business_tier1.s(biz_id) for biz_id in to_score),
+            finalize_scan.s(scan_id),
+        ).delay()
+    else:
+        finalize_scan.apply_async(args=([], scan_id))
+
+    return {"scan_id": scan_id, "scoring_started": len(to_score)}
 
 
 @shared_task(bind=True)
@@ -106,6 +152,51 @@ def finalize_scan(self, results: list, scan_id: int) -> dict[str, Any]:
     scored = sum(1 for r in (results or []) if isinstance(r, dict) and "overall_score" in r)
     logger.info("Scan %d finalized: %d businesses scored", scan_id, scored)
     return {"scan_id": scan_id, "scored": scored}
+
+
+def _filter_needs_enrichment(business_ids: list[int]) -> list[int]:
+    """Return IDs that lack a completed enrichment within ENRICHMENT_CACHE_DAYS.
+
+    Businesses with a failed or missing enrichment always re-enrich.
+    """
+    from apps.enrichment.models import EnrichmentProfile
+
+    cutoff = timezone.now() - timedelta(days=ENRICHMENT_CACHE_DAYS)
+    recently_enriched = set(
+        EnrichmentProfile.objects.filter(
+            business_id__in=business_ids,
+            status=EnrichmentProfile.Status.COMPLETED,
+            enriched_at__gte=cutoff,
+        ).values_list("business_id", flat=True)
+    )
+    return [bid for bid in business_ids if bid not in recently_enriched]
+
+
+def _filter_needs_scoring(
+    business_ids: list[int],
+    force_rescore: set[int] | None = None,
+) -> list[int]:
+    """Return IDs that need Tier 1 scoring.
+
+    A business is skipped only if it has a recent score AND was NOT freshly
+    enriched this run. Freshly enriched businesses always get a new score so
+    the score reflects the updated enrichment data.
+    """
+    from apps.scoring.models import AutomationScore
+
+    force_rescore = force_rescore or set()
+    cutoff = timezone.now() - timedelta(days=ENRICHMENT_CACHE_DAYS)
+
+    # Only bother checking the cache for businesses not in force_rescore.
+    to_check = [bid for bid in business_ids if bid not in force_rescore]
+    recently_scored = set(
+        AutomationScore.objects.filter(
+            business_id__in=to_check,
+            tier="tier1",
+            scored_at__gte=cutoff,
+        ).values_list("business_id", flat=True)
+    )
+    return [bid for bid in business_ids if bid not in recently_scored]
 
 
 def _run_discovery(scan: Scan) -> list[int]:
