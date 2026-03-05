@@ -57,6 +57,6 @@ def enrich_business(self, business_id: int) -> dict[str, Any]:
     except Exception as exc:
         logger.exception("enrich_business %d failed: %s", business_id, exc)
         profile.status = EnrichmentProfile.Status.FAILED
-        profile.error_log = str(exc)
+        profile.error_log = str(exc).replace("\x00", "")
         profile.save(update_fields=["status", "error_log"])
         raise self.retry(exc=exc)
