@@ -61,7 +61,8 @@ class WebsiteCrawler:
 
         final_url = str(response.url)
         has_ssl = final_url.startswith("https://")
-        html = response.text
+        # Strip NUL bytes — PostgreSQL rejects them in text fields
+        html = response.text.replace("\x00", "")
         headers = dict(response.headers)
 
         soup = BeautifulSoup(html, "html.parser")
@@ -172,9 +173,9 @@ class WebsiteCrawler:
         for tag in soup(["script", "style", "nav", "footer", "head"]):
             tag.decompose()
         text = soup.get_text(separator=" ", strip=True)
-        # Collapse whitespace
+        # Collapse whitespace and strip any residual NUL bytes
         import re
-        text = re.sub(r"\s+", " ", text)
+        text = re.sub(r"\s+", " ", text).replace("\x00", "")
         return text[:MAX_TEXT_LENGTH]
 
     def _check_mobile_responsive(self, soup: BeautifulSoup) -> bool:
