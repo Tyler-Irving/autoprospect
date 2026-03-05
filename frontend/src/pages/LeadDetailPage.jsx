@@ -43,9 +43,11 @@ function Section({ title, children }) {
 export default function LeadDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { selectedLead: lead, fetchLead, updateLead, deleteLead, clearSelected } = useLeadStore()
+  const { selectedLead: lead, fetchLead, updateLead, deleteLead, generateOutreach, clearSelected } = useLeadStore()
   const [notes, setNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [outreachTab, setOutreachTab] = useState('email')
 
   useEffect(() => {
     fetchLead(id)
@@ -81,6 +83,23 @@ export default function LeadDetailPage() {
     } finally {
       setSavingNotes(false)
     }
+  }
+
+  const handleGenerateOutreach = () => {
+    if (generating) return
+    setGenerating(true)
+    const businessName = b?.name
+    const promise = generateOutreach(lead.id)
+    promise.finally(() => setGenerating(false))
+    toast.promise(promise, {
+      loading: `Generating outreach for ${businessName}…`,
+      success: `Outreach ready for ${businessName}`,
+      error: (err) => err?.response?.data?.detail || `Failed to generate outreach for ${businessName}`,
+    })
+  }
+
+  const handleCopy = (text, label) => {
+    navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied`))
   }
 
   const handleDelete = async () => {
@@ -275,17 +294,107 @@ export default function LeadDetailPage() {
           </div>
         </Section>
 
-        {/* Outreach (Phase 5 stub) */}
+        {/* AI Outreach */}
         <Section title="AI Outreach">
-          <div className="text-center py-4">
-            <p className="text-sm text-slate-500">Outreach generation coming in Phase 5.</p>
-            <button
-              disabled
-              className="mt-3 text-xs bg-slate-800 text-slate-600 px-4 py-2 rounded-lg cursor-not-allowed"
-            >
-              Generate Email + Call Script
-            </button>
-          </div>
+          {lead.outreach_generated_at ? (
+            <div className="space-y-3">
+              {/* Tab switcher */}
+              <div className="flex gap-1 bg-slate-800 p-1 rounded-lg w-fit">
+                <button
+                  onClick={() => setOutreachTab('email')}
+                  className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                    outreachTab === 'email'
+                      ? 'bg-slate-700 text-slate-100'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Email
+                </button>
+                <button
+                  onClick={() => setOutreachTab('call')}
+                  className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                    outreachTab === 'call'
+                      ? 'bg-slate-700 text-slate-100'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  Call Script
+                </button>
+              </div>
+
+              {outreachTab === 'email' && (
+                <div className="space-y-2">
+                  {lead.generated_email_subject && (
+                    <div className="bg-slate-800 rounded-lg px-3 py-2">
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold mb-1">Subject</p>
+                      <p className="text-sm text-slate-200">{lead.generated_email_subject}</p>
+                    </div>
+                  )}
+                  {lead.generated_email && (
+                    <div className="relative bg-slate-800 rounded-lg px-3 py-3">
+                      <p className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold mb-2">Body</p>
+                      <p className="text-sm text-slate-300 whitespace-pre-line leading-relaxed">{lead.generated_email}</p>
+                      <button
+                        onClick={() => handleCopy(`Subject: ${lead.generated_email_subject}\n\n${lead.generated_email}`, 'Email')}
+                        className="absolute top-2 right-2 text-[10px] text-slate-500 hover:text-slate-300 bg-slate-700 px-2 py-1 rounded transition-colors"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {outreachTab === 'call' && (
+                <div className="relative bg-slate-800 rounded-lg px-3 py-3">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold mb-2">Script</p>
+                  <p className="text-sm text-slate-300 whitespace-pre-line leading-relaxed font-mono">
+                    {lead.generated_call_script}
+                  </p>
+                  <button
+                    onClick={() => handleCopy(lead.generated_call_script, 'Call script')}
+                    className="absolute top-2 right-2 text-[10px] text-slate-500 hover:text-slate-300 bg-slate-700 px-2 py-1 rounded transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[10px] text-slate-600">
+                  Generated {new Date(lead.outreach_generated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+                <button
+                  onClick={handleGenerateOutreach}
+                  disabled={generating}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-50"
+                >
+                  Regenerate
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center py-4 gap-3">
+              {generating ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm text-slate-500">Writing outreach…</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-500 text-center">
+                    Generate a personalized cold email and call script based on this business's automation score and signals.
+                  </p>
+                  <button
+                    onClick={handleGenerateOutreach}
+                    className="text-sm bg-blue-600 hover:bg-blue-500 text-white font-semibold px-5 py-2 rounded-lg transition-colors"
+                  >
+                    Generate Email + Call Script
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </Section>
 
         {/* Activity log */}
