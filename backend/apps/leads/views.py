@@ -71,11 +71,16 @@ class LeadViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="generate-outreach")
     def generate_outreach(self, request, pk=None):
-        """Placeholder for Phase 5 outreach generation."""
-        return Response(
-            {"detail": "Outreach generation not yet implemented (Phase 5)."},
-            status=status.HTTP_501_NOT_IMPLEMENTED,
-        )
+        """Generate outreach (email + call script) for this lead synchronously."""
+        lead = self.get_object()
+        try:
+            from apps.leads.tasks import run_outreach_generation
+            run_outreach_generation(lead.id)
+        except Exception as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        lead.refresh_from_db()
+        serializer = LeadDetailSerializer(lead)
+        return Response(serializer.data)
 
     @action(detail=True, methods=["get"], url_path="activities")
     def activities(self, request, pk=None):
