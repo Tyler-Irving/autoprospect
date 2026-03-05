@@ -110,6 +110,7 @@ CELERY_TASK_ROUTES = {
     "apps.scoring.tasks.*": {"queue": "scoring"},
     "apps.scans.tasks.*": {"queue": "default"},
     "apps.businesses.tasks.*": {"queue": "default"},
+    "apps.leads.tasks.*": {"queue": "default"},
 }
 
 # External APIs
