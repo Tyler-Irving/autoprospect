@@ -47,7 +47,11 @@ export const useLeadStore = create((set, get) => ({
     const { data } = await leadsApi.update(id, patch)
     set((state) => ({
       leads: state.leads.map((l) => (l.id === id ? { ...l, ...data } : l)),
-      selectedLead: state.selectedLead?.id === id ? { ...state.selectedLead, ...data } : state.selectedLead,
+      // Preserve the full business object (enrichment + scores) from the existing
+      // selectedLead — the PATCH response uses a minimal serializer that omits them.
+      selectedLead: state.selectedLead?.id === id
+        ? { ...state.selectedLead, ...data, business: state.selectedLead.business }
+        : state.selectedLead,
     }))
     return data
   },
@@ -58,6 +62,15 @@ export const useLeadStore = create((set, get) => ({
       leads: state.leads.filter((l) => l.id !== id),
       selectedLead: state.selectedLead?.id === id ? null : state.selectedLead,
     }))
+  },
+
+  generateOutreach: async (leadId) => {
+    const { data } = await leadsApi.generateOutreach(leadId)
+    // Only update selectedLead if the user is still on the same lead's page
+    set((state) => ({
+      selectedLead: state.selectedLead?.id === leadId ? data : state.selectedLead,
+    }))
+    return data
   },
 
   clearSelected: () => set({ selectedLead: null }),
