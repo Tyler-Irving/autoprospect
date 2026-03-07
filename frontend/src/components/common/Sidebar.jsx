@@ -1,4 +1,14 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { motion, useReducedMotion } from 'framer-motion'
+
+// Avoid animating motion.aside inline — named ref prevents false lint warnings
+const MotionAside = motion.aside
+
+// Material Design "standard" easing — feels physical, not mechanical
+const EASE = [0.4, 0, 0.2, 1]
+const SIDEBAR_W_OPEN = 184
+const SIDEBAR_W_CLOSED = 56
 
 const NAV = [
   {
@@ -43,71 +53,120 @@ const SETTINGS_ICON = (
   </svg>
 )
 
-export default function Sidebar() {
+// Label transitions: opacity + translateX only (GPU-composited, zero reflow)
+// Enter: slight delay so sidebar width settles first; Exit: snappy
+function labelStyle(open, reduced) {
+  if (reduced) return { opacity: open ? 1 : 0 }
+  return {
+    opacity: open ? 1 : 0,
+    transform: open ? 'translateX(0)' : 'translateX(-6px)',
+    transition: open
+      ? 'opacity 0.15s ease-out 0.06s, transform 0.15s ease-out 0.06s'
+      : 'opacity 0.09s ease-in, transform 0.09s ease-in',
+  }
+}
+
+function NavItem({ to, label, icon, open, end, reduced }) {
   return (
-    <aside className="w-14 flex-shrink-0 flex flex-col items-center py-3 gap-1" style={{ background: 'var(--sidebar)', borderRight: '1px solid var(--sidebar-border)' }}>
-      {/* Logo tile */}
-      <div
-        className="mb-3 flex items-center justify-center text-white font-extrabold text-xs tracking-tight"
-        style={{ width: 32, height: 32, borderRadius: 8, background: '#f97316', flexShrink: 0 }}
-      >
-        AP
+    <NavLink
+      to={to}
+      end={end}
+      aria-label={label}
+      className={({ isActive }) =>
+        [
+          'relative flex items-center gap-3 rounded-lg h-9 cursor-pointer',
+          'transition-colors duration-150',
+          isActive ? 'text-white' : 'text-[#737373] hover:text-[#fafafa]',
+        ].join(' ')
+      }
+      style={({ isActive }) => ({
+        background: isActive ? 'var(--sidebar-accent)' : 'transparent',
+        // Consistent left padding keeps icon at ~26px centre in 56px collapsed state
+        paddingLeft: 20,
+        paddingRight: 10,
+      })}
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <span
+              className="absolute"
+              style={{
+                left: -1,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 2,
+                height: 18,
+                background: '#f97316',
+                borderRadius: '0 2px 2px 0',
+              }}
+            />
+          )}
+
+          <span className="shrink-0 flex items-center justify-center" style={{ width: 16 }}>
+            {icon}
+          </span>
+
+          {/* Always in DOM — clipped by aside overflow:hidden when collapsed.
+              Only opacity + translateX animate (no width, no reflow). */}
+          <span
+            aria-hidden={!open}
+            className="text-xs font-medium whitespace-nowrap select-none"
+            style={{
+              color: isActive ? '#fafafa' : 'inherit',
+              ...labelStyle(open, reduced),
+            }}
+          >
+            {label}
+          </span>
+        </>
+      )}
+    </NavLink>
+  )
+}
+
+export default function Sidebar() {
+  const [open, setOpen] = useState(false)
+  const reduced = useReducedMotion()
+
+  return (
+    <MotionAside
+      onHoverStart={() => setOpen(true)}
+      onHoverEnd={() => setOpen(false)}
+      initial={false}
+      animate={{ width: open ? SIDEBAR_W_OPEN : SIDEBAR_W_CLOSED }}
+      transition={reduced ? { duration: 0 } : { duration: 0.22, ease: EASE }}
+      className="flex-shrink-0 flex flex-col py-3 gap-1 overflow-hidden"
+      style={{
+        background: 'var(--sidebar)',
+        borderRight: '1px solid var(--sidebar-border)',
+        willChange: 'width',
+      }}
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-3 mb-3" style={{ paddingLeft: 12, paddingRight: 10 }}>
+        <div
+          className="shrink-0 flex items-center justify-center text-white font-extrabold text-xs tracking-tight"
+          style={{ width: 32, height: 32, borderRadius: 8, background: '#f97316' }}
+        >
+          AP
+        </div>
+        <span
+          aria-hidden={!open}
+          className="text-xs font-semibold whitespace-nowrap select-none"
+          style={{ color: 'var(--foreground)', ...labelStyle(open, reduced) }}
+        >
+          AutoProspect
+        </span>
       </div>
 
-      {/* Nav items */}
       {NAV.map(({ to, label, icon }) => (
-        <NavLink
-          key={to}
-          to={to}
-          end={to === '/'}
-          title={label}
-          className={({ isActive }) =>
-            [
-              'relative flex items-center justify-center rounded-lg transition-colors',
-              'w-9 h-9',
-              isActive
-                ? 'text-white'
-                : 'text-[#737373] hover:text-[#fafafa]',
-            ].join(' ')
-          }
-          style={({ isActive }) => ({
-            background: isActive ? 'var(--sidebar-accent)' : 'transparent',
-          })}
-        >
-          {({ isActive }) => (
-            <>
-              {/* Active left-edge indicator */}
-              {isActive && (
-                <span
-                  className="absolute"
-                  style={{
-                    left: -1,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: 2,
-                    height: 18,
-                    background: '#f97316',
-                    borderRadius: '0 2px 2px 0',
-                  }}
-                />
-              )}
-              {icon}
-            </>
-          )}
-        </NavLink>
+        <NavItem key={to} to={to} label={label} icon={icon} open={open} end={to === '/'} reduced={reduced} />
       ))}
 
-      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Settings — non-navigable placeholder */}
-      <button
-        title="Settings"
-        className="flex items-center justify-center rounded-lg w-9 h-9 transition-colors text-[#737373] hover:text-[#fafafa]"
-        style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
-      >
-        {SETTINGS_ICON}
-      </button>
-    </aside>
+      <NavItem to="/settings" label="Settings" icon={SETTINGS_ICON} open={open} reduced={reduced} />
+    </MotionAside>
   )
 }
