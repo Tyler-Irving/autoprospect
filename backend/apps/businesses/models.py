@@ -35,9 +35,15 @@ class Business(models.Model):
 
     @property
     def overall_score(self) -> int | None:
-        """Return the most recent Tier 1 score, if any."""
-        score = self.scores.filter(tier="tier1").order_by("-scored_at").first()
-        return score.overall_score if score else None
+        """Return the most recent Tier 1 score, if any.
+
+        Uses the prefetch cache when scores are prefetched (e.g. in list views),
+        avoiding an extra DB query per business.
+        """
+        tier1 = [s for s in self.scores.all() if s.tier == "tier1"]
+        if not tier1:
+            return None
+        return max(tier1, key=lambda s: s.scored_at).overall_score
 
     @property
     def has_lead(self) -> bool:

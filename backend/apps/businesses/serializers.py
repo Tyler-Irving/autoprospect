@@ -86,10 +86,10 @@ class BusinessListSerializer(serializers.ModelSerializer):
 
     def get_tier1_score(self, obj) -> dict | None:
         """Return the most recent Tier 1 score if available."""
-        score = obj.scores.filter(tier="tier1").order_by("-scored_at").first()
-        if score:
-            return ScoreInlineSerializer(score).data
-        return None
+        tier1 = [s for s in obj.scores.all() if s.tier == "tier1"]
+        if not tier1:
+            return None
+        return ScoreInlineSerializer(max(tier1, key=lambda s: s.scored_at)).data
 
 
 class Tier1ScoreSummarySerializer(serializers.ModelSerializer):
@@ -143,10 +143,10 @@ class MapMarkerSerializer(serializers.ModelSerializer):
 
     def get_tier1_score(self, obj) -> dict | None:
         """Return the most recent Tier 1 score if available."""
-        score = obj.scores.filter(tier="tier1").order_by("-scored_at").first()
-        if score:
-            return Tier1ScoreSummarySerializer(score).data
-        return None
+        tier1 = [s for s in obj.scores.all() if s.tier == "tier1"]
+        if not tier1:
+            return None
+        return Tier1ScoreSummarySerializer(max(tier1, key=lambda s: s.scored_at)).data
 
 
 class BusinessForLeadSerializer(serializers.ModelSerializer):
@@ -175,10 +175,10 @@ class BusinessForLeadSerializer(serializers.ModelSerializer):
         ]
 
     def get_tier1_score(self, obj) -> dict | None:
-        score = obj.scores.filter(tier="tier1").order_by("-scored_at").first()
-        if score:
-            return Tier1ScoreSummarySerializer(score).data
-        return None
+        tier1 = [s for s in obj.scores.all() if s.tier == "tier1"]
+        if not tier1:
+            return None
+        return Tier1ScoreSummarySerializer(max(tier1, key=lambda s: s.scored_at)).data
 
 
 class BusinessDetailSerializer(serializers.ModelSerializer):

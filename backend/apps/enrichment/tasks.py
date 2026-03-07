@@ -35,6 +35,9 @@ def enrich_business(self, business_id: int) -> dict[str, Any]:
         crawler = WebsiteCrawler()
         data = crawler.crawl(business.website_url, business.reviews_data)
 
+        from django.db.models import F
+        from apps.scans.models import Scan
+
         with transaction.atomic():
             for field, value in data.items():
                 setattr(profile, field, value)
@@ -42,14 +45,13 @@ def enrich_business(self, business_id: int) -> dict[str, Any]:
             profile.enriched_at = timezone.now()
             profile.error_log = ""
             profile.save()
-
-        # Increment scan counter atomically
-        from django.db.models import F
-        from apps.scans.models import Scan
-        Scan.objects.filter(pk=business.scan_id).update(
-            businesses_enriched=F("businesses_enriched") + 1,
-            updated_at=timezone.now(),
-        )
+            # Increment scan counter inside the atomic block so the profile
+            # status and the counter are always in sync — even if the process
+            # is killed between the two writes.
+            Scan.objects.filter(pk=business.scan_id).update(
+                businesses_enriched=F("businesses_enriched") + 1,
+                updated_at=timezone.now(),
+            )
 
         logger.info("Enriched business %d (%s)", business_id, business.name)
         return {"business_id": business_id, "reachable": data.get("website_reachable")}
@@ -58,5 +60,8 @@ def enrich_business(self, business_id: int) -> dict[str, Any]:
         logger.exception("enrich_business %d failed: %s", business_id, exc)
         profile.status = EnrichmentProfile.Status.FAILED
         profile.error_log = str(exc).replace("\x00", "")
-        profile.save(update_fields=["status", "error_log"])
+        # Clear enriched_at so a stale timestamp from a prior successful run
+        # cannot mislead _filter_needs_enrichment on the next scan.
+        profile.enriched_at = None
+        profile.save(update_fields=["status", "error_log", "enriched_at"])
         raise self.retry(exc=exc)
