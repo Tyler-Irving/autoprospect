@@ -82,3 +82,7 @@ class TestWebsiteCrawler:
             mock_get.return_value = _mock_response(status=404)
             result = WebsiteCrawler().crawl("https://joesplumbing.com", [])
         assert result["website_reachable"] is False
+
+    def test_blocks_localhost_target(self):
+        result = WebsiteCrawler().crawl("http://localhost/admin", [])
+        assert result["website_reachable"] is False

@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import logging
+import ipaddress
 import re
+import socket
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -39,6 +42,9 @@ class WebsiteCrawler:
         # Ensure scheme
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
+        if not self._is_safe_public_url(url):
+            logger.warning("Blocked potentially unsafe crawl target: %s", url)
+            return self._empty_result(reachable=False)
 
         start = time.monotonic()
         try:
@@ -202,3 +208,52 @@ class WebsiteCrawler:
         if viewport and viewport.get("content"):
             return "width=device-width" in viewport["content"].lower()
         return False
+
+    def _is_safe_public_url(self, url: str) -> bool:
+        """Best-effort SSRF guard: block local/private/reserved targets."""
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in {"http", "https"}:
+                return False
+            host = (parsed.hostname or "").strip().lower()
+            if not host:
+                return False
+            if host in {"localhost", "127.0.0.1", "::1"} or host.endswith(".local"):
+                return False
+
+            # Block literal IP targets in private/link-local/reserved ranges.
+            try:
+                ip = ipaddress.ip_address(host)
+                if self._is_blocked_ip(ip):
+                    return False
+            except ValueError:
+                pass
+
+            # Resolve DNS and block if any resolved address is private/internal.
+            try:
+                infos = socket.getaddrinfo(host, parsed.port or 443, proto=socket.IPPROTO_TCP)
+            except socket.gaierror:
+                # If DNS isn't available in the current environment, let the
+                # upstream request path decide connectivity.
+                return True
+            for family, _, _, _, sockaddr in infos:
+                raw_ip = sockaddr[0]
+                if "%" in raw_ip:  # strip IPv6 scope zone
+                    raw_ip = raw_ip.split("%", 1)[0]
+                ip = ipaddress.ip_address(raw_ip)
+                if self._is_blocked_ip(ip):
+                    return False
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def _is_blocked_ip(ip: ipaddress._BaseAddress) -> bool:
+        return bool(
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        )
