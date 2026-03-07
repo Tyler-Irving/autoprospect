@@ -17,6 +17,7 @@ export default function MapView() {
     searchCenter,
     searchRadiusMeters,
     markers,
+    setMapCenter,
     setSelectedBusiness,
     setHoveredBusiness,
   } = useMapStore()
@@ -32,6 +33,20 @@ export default function MapView() {
     })
     map.addControl(new mapboxgl.NavigationControl(), 'top-right')
     mapRef.current = map
+
+    // Fly to user's real location on first load if geolocation is available.
+    // Falls back to the default LA center silently if denied or unsupported.
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => {
+          const center = [coords.longitude, coords.latitude]
+          setMapCenter(center)
+          map.flyTo({ center, zoom: mapZoom })
+        },
+        () => {}, // denied or unavailable — stay at default
+        { timeout: 5000 },
+      )
+    }
 
     return () => {
       map.remove()
