@@ -14,7 +14,7 @@ const RADIUS_OPTIONS = [
 
 export default function SearchControls() {
   const { launchScan, isLaunching, activeScan } = useScanStore()
-  const { setSearchCenter, setSearchRadius, loadMarkersForScan, clearMarkers, mapClickCenter } = useMapStore()
+  const { setSearchCenter, setSearchRadius, loadMarkersForScan, clearMarkers, mapClickCenter, setMapClickCenter } = useMapStore()
 
   const [location, setLocation] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -38,25 +38,19 @@ export default function SearchControls() {
   useEffect(() => {
     if (!mapClickCenter) return
     const [lng, lat] = mapClickCenter
-    setSelectedCoords(mapClickCenter)
-    setLocation('Locating\u2026')
-
+    const fallback = `${lat.toFixed(4)}\u00b0 N, ${Math.abs(lng).toFixed(4)}\u00b0 W`
     const token = import.meta.env.VITE_MAPBOX_TOKEN
-    if (!token) {
-      setLocation(`${lat.toFixed(4)}\u00b0 N, ${Math.abs(lng).toFixed(4)}\u00b0 W`)
-      return
-    }
-    fetch(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=place,locality,neighborhood,district&access_token=${token}`
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        const name = data.features?.[0]?.place_name
-        setLocation(name || `${lat.toFixed(4)}\u00b0 N, ${Math.abs(lng).toFixed(4)}\u00b0 W`)
-      })
-      .catch(() => {
-        setLocation(`${lat.toFixed(4)}\u00b0 N, ${Math.abs(lng).toFixed(4)}\u00b0 W`)
-      })
+
+    const namePromise = token
+      ? fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=place,locality,neighborhood,district&access_token=${token}`
+        )
+          .then((r) => r.json())
+          .then((data) => data.features?.[0]?.place_name || fallback)
+          .catch(() => fallback)
+      : Promise.resolve(fallback)
+
+    namePromise.then((name) => setLocation(name))
   }, [mapClickCenter])
 
   // Close suggestions when clicking outside
@@ -91,6 +85,7 @@ export default function SearchControls() {
     const val = e.target.value
     setLocation(val)
     setSelectedCoords(null)
+    setMapClickCenter(null)
     fetchSuggestions(val)
   }
 
@@ -116,9 +111,10 @@ export default function SearchControls() {
     e.preventDefault()
     if (!location || selectedTypes.length === 0) return
 
-    if (!selectedCoords) return
+    const effectiveCoords = selectedCoords || mapClickCenter
+    if (!effectiveCoords) return
 
-    const [lng, lat] = selectedCoords
+    const [lng, lat] = effectiveCoords
     setSearchCenter([lng, lat])
     setSearchRadius(radius)
     clearMarkers()
@@ -135,28 +131,64 @@ export default function SearchControls() {
 
   const isRunning = activeScan && !['completed', 'failed'].includes(activeScan.status)
 
+  const inputStyle = {
+    background: 'var(--secondary)',
+    color: 'var(--foreground)',
+    border: '1px solid var(--border)',
+  }
+
+  const inputClass = 'w-full h-9 px-3 rounded text-sm focus:outline-none transition-colors'
+
   return (
     <form onSubmit={handleScan} className="flex flex-col gap-3">
+
+      {/* Location */}
       <div ref={wrapperRef} className="relative">
-        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>Location</label>
-        <input
-          type="text"
-          value={location}
-          onChange={handleLocationChange}
-          onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-          placeholder="Hernando, MS or click the map"
-          autoComplete="off"
-          className="w-full px-3 py-2 rounded text-sm placeholder-slate-500 focus:outline-none"
-          style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
-        />
+        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>
+          Location
+        </label>
+        <div className="relative">
+          {/* Search icon */}
+          <svg
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"
+            width="13" height="13" fill="none" stroke="currentColor"
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            viewBox="0 0 24 24" style={{ color: 'var(--muted-foreground)' }}
+          >
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text"
+            value={location}
+            onChange={handleLocationChange}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            placeholder="City, neighborhood — or click map"
+            autoComplete="off"
+            className={inputClass}
+            style={{ ...inputStyle, paddingLeft: '2rem' }}
+          />
+          {/* Resolved indicator */}
+          {(selectedCoords || mapClickCenter) && (
+            <span
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full"
+              style={{ background: '#f97316' }}
+            />
+          )}
+        </div>
+        {/* Autocomplete dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <ul className="absolute z-50 left-0 right-0 mt-1 rounded shadow-lg overflow-hidden" style={{ background: '#141414', border: '1px solid var(--border)' }}>
+          <ul
+            className="absolute z-50 left-0 right-0 mt-1 rounded overflow-hidden"
+            style={{ background: 'var(--popover)', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,.5)' }}
+          >
             {suggestions.map((prediction) => (
               <li
                 key={prediction.place_id}
                 onMouseDown={() => handleSelectSuggestion(prediction)}
-                className="px-3 py-2 text-sm cursor-pointer truncate hover:bg-[#1a1a1a]"
-                style={{ color: 'var(--foreground)' }}
+                className="px-3 py-2 text-xs cursor-pointer truncate transition-colors"
+                style={{ color: 'var(--foreground)', borderBottom: '1px solid var(--border)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--accent)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 {prediction.description}
               </li>
@@ -165,13 +197,16 @@ export default function SearchControls() {
         )}
       </div>
 
+      {/* Radius */}
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>Radius</label>
+        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>
+          Radius
+        </label>
         <select
           value={radius}
           onChange={(e) => setRadius(Number(e.target.value))}
-          className="w-full px-3 py-2 rounded text-sm focus:outline-none"
-          style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
+          className={inputClass}
+          style={inputStyle}
         >
           {RADIUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -179,58 +214,80 @@ export default function SearchControls() {
         </select>
       </div>
 
+      {/* Business Types */}
       <div>
-        <label className="block text-xs font-medium mb-2" style={{ color: 'var(--muted-foreground)' }}>Business Types</label>
-        <div className="flex flex-wrap gap-1">
-          {PLACE_TYPES.map((type) => (
-            <button
-              key={type.value}
-              type="button"
-              onClick={() => toggleType(type.value)}
-              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                selectedTypes.includes(type.value)
-                  ? 'bg-blue-600 text-white'
-                  : 'hover:bg-[#333]'
-              }`}
-              style={selectedTypes.includes(type.value) ? undefined : { background: 'var(--secondary)', color: 'var(--muted-foreground)' }}
-            >
-              {type.label}
-            </button>
-          ))}
+        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>
+          Business Types
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          {PLACE_TYPES.map((type) => {
+            const active = selectedTypes.includes(type.value)
+            return (
+              <button
+                key={type.value}
+                type="button"
+                onClick={() => toggleType(type.value)}
+                className="px-2.5 py-1 rounded-full text-xs font-medium transition-all cursor-pointer"
+                style={
+                  active
+                    ? { background: '#f97316', color: '#fff', border: '1px solid #f97316' }
+                    : { background: 'var(--secondary)', color: 'var(--muted-foreground)', border: '1px solid var(--border)' }
+                }
+              >
+                {type.label}
+              </button>
+            )
+          })}
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>Keyword (optional)</label>
-        <input
-          type="text"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          placeholder="24 hour, emergency..."
-          className="w-full px-3 py-2 rounded text-sm placeholder-slate-500 focus:outline-none"
-          style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
-        />
+      {/* Optional fields — visually separated */}
+      <div className="flex flex-col gap-3 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
+        <div>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>
+            Keyword <span style={{ color: 'var(--muted-foreground)', fontWeight: 400, opacity: 0.6 }}>— optional</span>
+          </label>
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="emergency, 24 hour…"
+            className={inputClass}
+            style={inputStyle}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--muted-foreground)' }}>
+            Scan Label <span style={{ color: 'var(--muted-foreground)', fontWeight: 400, opacity: 0.6 }}>— optional</span>
+          </label>
+          <input
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Hernando Plumbers Q1"
+            className={inputClass}
+            style={inputStyle}
+          />
+        </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>Scan Label (optional)</label>
-        <input
-          type="text"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="LA Plumbers Q1"
-          className="w-full px-3 py-2 rounded text-sm placeholder-slate-500 focus:outline-none"
-          style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
-        />
-      </div>
-
+      {/* Submit */}
       <button
         type="submit"
-        disabled={isLaunching || isRunning || !location || selectedTypes.length === 0}
-        className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold text-sm transition-colors"
+        disabled={isLaunching || isRunning || !location || !(selectedCoords || mapClickCenter) || selectedTypes.length === 0}
+        className="w-full h-9 rounded text-sm font-semibold text-white transition-all cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+        style={{ background: (isLaunching || isRunning) ? '#c2510f' : '#f97316' }}
       >
-        {isLaunching || isRunning ? 'Scanning...' : 'Start Scan'}
+        {isLaunching || isRunning ? 'Scanning…' : 'Start Scan'}
       </button>
+
+      {/* No-coords hint */}
+      {location && !(selectedCoords || mapClickCenter) && !isRunning && (
+        <p className="text-[11px] text-center" style={{ color: 'var(--muted-foreground)' }}>
+          Select a suggestion or click the map
+        </p>
+      )}
     </form>
   )
 }

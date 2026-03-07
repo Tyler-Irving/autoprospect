@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useLeadStore } from '../store/leadStore'
 import { getScoreColor, getScoreLabel } from '../utils/constants'
+import { businessesApi } from '../api/businesses'
 
 const STATUS_OPTIONS = [
   { value: 'new', label: 'New' },
@@ -48,6 +49,8 @@ export default function LeadDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [sending, setSending] = useState(false)
+  const [showDossier, setShowDossier] = useState(false)
+  const tier2PollRef = useRef(null)
   const [outreachTab, setOutreachTab] = useState('email')
   const [contactEmail, setContactEmail] = useState('')
   const mountedRef = useRef(true)
@@ -55,6 +58,12 @@ export default function LeadDetailPage() {
   useEffect(() => {
     mountedRef.current = true
     return () => { mountedRef.current = false }
+  }, [])
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') setShowDossier(false) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
   }, [])
 
   useEffect(() => {
@@ -68,6 +77,27 @@ export default function LeadDetailPage() {
       setContactEmail(lead.contact_email ?? '')
     }
   }, [lead?.id])
+
+  // Poll while the DB says tier2_pending — survives navigation and page refresh
+  useEffect(() => {
+    if (!lead?.business?.tier2_pending) return
+
+    tier2PollRef.current = setInterval(async () => {
+      try {
+        const updated = await fetchLead(id)
+        if (!updated?.business?.tier2_pending) {
+          clearInterval(tier2PollRef.current)
+          if (updated?.business?.tier2_score) {
+            toast.success('Deep analysis complete')
+          }
+        }
+      } catch {
+        // silently continue polling
+      }
+    }, 5000)
+
+    return () => clearInterval(tier2PollRef.current)
+  }, [lead?.id, lead?.business?.tier2_pending])
 
   if (!lead) {
     return (
@@ -131,6 +161,16 @@ export default function LeadDetailPage() {
       success: `Email sent to ${businessName}`,
       error: (err) => err?.response?.data?.detail || `Failed to send email to ${businessName}`,
     })
+  }
+
+  const handleRunTier2 = async () => {
+    try {
+      await businessesApi.enrichTier2(b.id)
+      await fetchLead(id)
+      toast.success('Deep analysis complete')
+    } catch {
+      toast.error('Deep analysis failed')
+    }
   }
 
   const handleDelete = async () => {
@@ -199,6 +239,18 @@ export default function LeadDetailPage() {
                 )}
                 {b?.rating && (
                   <span>⭐ {b.rating} ({b.total_reviews} reviews)</span>
+                )}
+                {lead.contact_email && (
+                  <span className="flex items-center gap-1.5">
+                    <a href={`mailto:${lead.contact_email}`} className="hover:underline" style={{ color: 'var(--foreground)' }}>
+                      ✉ {lead.contact_email}
+                    </a>
+                    {e?.contact_email && e.contact_email === lead.contact_email && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'color-mix(in srgb, #22c55e 15%, transparent)', color: '#22c55e', border: '1px solid color-mix(in srgb, #22c55e 30%, transparent)' }}>
+                        auto-found
+                      </span>
+                    )}
+                  </span>
                 )}
               </div>
             </div>
@@ -310,6 +362,136 @@ export default function LeadDetailPage() {
             )}
           </Section>
         </div>
+
+        {/* Dossier modal */}
+        {showDossier && b?.tier2_score && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-6"
+            style={{ background: 'rgba(0,0,0,0.7)' }}
+            onClick={() => setShowDossier(false)}
+          >
+            <div
+              className="relative w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl overflow-hidden"
+              style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-8 py-5 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+                <div>
+                  <h2 className="text-base font-semibold" style={{ color: 'var(--foreground)' }}>Full Deep Analysis</h2>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>{b.name}</p>
+                </div>
+                <button
+                  onClick={() => setShowDossier(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+                  style={{ color: 'var(--muted-foreground)' }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Modal body — scrollable */}
+              <div className="overflow-y-auto px-8 py-6 space-y-8">
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Full Dossier</p>
+                  <p className="text-base leading-8 whitespace-pre-line" style={{ color: 'var(--foreground)' }}>{b.tier2_score.full_dossier}</p>
+                </div>
+                <div className="space-y-3" style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>Competitor Analysis</p>
+                  <p className="text-base leading-8 whitespace-pre-line" style={{ color: 'var(--foreground)' }}>{b.tier2_score.competitor_analysis}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Deep Analysis */}
+        <Section title="Deep Analysis">
+          {b?.tier2_score ? (
+            <div className="space-y-4">
+              {/* Summary */}
+              {b.tier2_score.summary && (
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--foreground)' }}>{b.tier2_score.summary}</p>
+              )}
+
+              {/* Key signals */}
+              {b.tier2_score.key_signals?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {b.tier2_score.key_signals.map((sig, i) => (
+                    <span key={i} className="text-xs px-2.5 py-0.5 rounded-full" style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}>
+                      {sig}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Pitch angle */}
+              {b.tier2_score.recommended_pitch_angle && (
+                <div className="rounded-lg px-3 py-2" style={{ background: 'color-mix(in srgb, #f97316 10%, transparent)', border: '1px solid color-mix(in srgb, #f97316 25%, transparent)' }}>
+                  <p className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: '#f97316' }}>Pitch angle</p>
+                  <p className="text-xs" style={{ color: 'var(--foreground)' }}>{b.tier2_score.recommended_pitch_angle}</p>
+                </div>
+              )}
+
+              {/* View full dossier CTA */}
+              <button
+                onClick={() => setShowDossier(true)}
+                className="w-full py-2 rounded-lg text-sm font-medium transition-colors hover:opacity-90"
+                style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
+              >
+                View Full Analysis →
+              </button>
+
+              {b.tier2_pending && (
+                <div className="flex items-center gap-2 py-2" style={{ borderTop: '1px solid var(--border)' }}>
+                  <div className="w-3.5 h-3.5 shrink-0 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#f97316', borderTopColor: 'transparent' }} />
+                  <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Re-analyzing…</p>
+                </div>
+              )}
+              <div className="flex items-center justify-between" style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                <span className="text-[10px] font-mono" style={{ color: 'var(--muted-foreground)' }}>
+                  Analyzed {new Date(b.tier2_score.scored_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-mono" style={{ color: 'var(--muted-foreground)' }}>
+                    ${(b.tier2_score.api_cost_cents / 100).toFixed(2)}
+                  </span>
+                  <button
+                    onClick={handleRunTier2}
+                    disabled={b.tier2_pending}
+                    className="text-[10px] hover:opacity-80 transition-opacity disabled:opacity-50"
+                    style={{ color: 'var(--muted-foreground)' }}
+                  >
+                    {b.tier2_pending ? 'Running…' : 'Re-run'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center py-4 gap-3">
+              {b.tier2_pending ? (
+                <div className="w-full py-2 flex flex-col items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: '#f97316', borderTopColor: 'transparent' }} />
+                  <p className="text-sm" style={{ color: 'var(--foreground)' }}>Deep analysis running…</p>
+                  <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>Claude is writing a full dossier. This takes 20–60 seconds.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-center" style={{ color: 'var(--muted-foreground)' }}>
+                    Run a deeper Claude analysis for a full dossier, tool recommendations, ROI argument, and competitor comparison. ~$0.10.
+                  </p>
+                  <button
+                    onClick={handleRunTier2}
+                    className="text-sm font-semibold px-5 py-2 rounded-lg transition-colors hover:opacity-90"
+                    style={{ background: '#f97316', color: '#fff' }}
+                  >
+                    Run Deep Analysis
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </Section>
 
         {/* Notes */}
         <Section title="Notes">

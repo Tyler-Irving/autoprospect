@@ -51,7 +51,7 @@ function StatCard({ label, value, sub }) {
 }
 
 export default function LeadsPage() {
-  const { leads, filters, isLoading, setFilters, fetchLeads, updateLead, deleteLead } = useLeadStore()
+  const { leads, filters, isLoading, setFilters, fetchLeads, updateLead } = useLeadStore()
   const [stats, setStats] = useState(null)
   const isMounted = useRef(false)
 

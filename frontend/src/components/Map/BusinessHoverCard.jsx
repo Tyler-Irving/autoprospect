@@ -62,7 +62,11 @@ export default function BusinessHoverCard() {
     try {
       const result = await promoteBusiness(b.id)
       setPromoted(true)
-      toast.success(result.already_lead ? `${b.name} is already a lead` : `${b.name} added to leads`)
+      toast.success(
+        result.already_lead
+          ? `${b.name} is already a lead`
+          : `${b.name} added — deep analysis running…`
+      )
     } catch {
       toast.error('Failed to promote lead')
     } finally {

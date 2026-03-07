@@ -44,7 +44,10 @@ export default function ScanProgress() {
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-medium truncate" style={{ color: 'var(--foreground)' }}>{label || 'Scan in progress'}</span>
-        <span className={`text-xs font-mono ${isFailed ? 'text-red-400' : 'text-blue-400'}`}>
+        <span
+          className="text-xs font-mono"
+          style={{ color: isFailed ? '#f87171' : status === 'completed' ? '#22c55e' : '#f97316' }}
+        >
           {progress_pct}%
         </span>
       </div>
@@ -52,10 +55,11 @@ export default function ScanProgress() {
       {/* Progress bar */}
       <div className="h-1.5 rounded-full overflow-hidden mb-2" style={{ background: 'var(--secondary)' }}>
         <div
-          className={`h-full rounded-full transition-all duration-500 ${
-            isFailed ? 'bg-red-500' : status === 'completed' ? 'bg-green-500' : 'bg-blue-500'
-          }`}
-          style={{ width: `${progress_pct}%` }}
+          className="h-full rounded-full transition-all duration-500"
+          style={{
+            width: `${progress_pct}%`,
+            background: isFailed ? '#ef4444' : status === 'completed' ? '#22c55e' : '#f97316',
+          }}
         />
       </div>
 
@@ -85,7 +89,8 @@ export default function ScanProgress() {
             <button
               onClick={handleRetry}
               disabled={retrying}
-              className="flex-1 py-1.5 rounded text-xs font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors"
+              className="flex-1 py-1.5 rounded text-xs font-medium disabled:opacity-50 text-white transition-all"
+            style={{ background: '#f97316' }}
             >
               {retrying ? 'Restarting…' : 'Retry Scan'}
             </button>

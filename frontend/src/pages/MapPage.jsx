@@ -65,11 +65,20 @@ export default function MapPage() {
         style={{ background: 'var(--card)', borderRight: '1px solid var(--border)' }}
       >
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <h1 className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>AutoProspect</h1>
+          <div>
+            <h1 className="text-sm font-semibold leading-tight" style={{ color: 'var(--foreground)' }}>
+              {hasResults ? (activeScan?.label || 'Scan Results') : 'Prospect Scanner'}
+            </h1>
+            {!hasResults && !isRunning && (
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--muted-foreground)' }}>
+                Search or click the map to begin
+              </p>
+            )}
+          </div>
           {hasResults && (
             <button
               onClick={() => setShowSearch((v) => !v)}
-              className="text-[10px] transition-colors hover:text-[#fafafa]"
+              className="text-[10px] transition-colors hover:text-[#fafafa] cursor-pointer"
               style={{ color: 'var(--muted-foreground)' }}
             >
               {showSearch ? 'Hide search' : 'New search'}

@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useMapStore } from '../../store/mapStore'
-import { useLeadStore } from '../../store/leadStore'
 import { getScoreColor, getScoreLabel } from '../../utils/constants'
 
 const DEAL_COLORS = {
@@ -169,6 +168,17 @@ export default function BusinessDetailDrawer({ onPromote, promoting, promoted })
                     >
                       {websiteDisplay}
                     </a>
+                  </div>
+                )}
+                {b.contact_email && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-xs" style={{ color: 'var(--muted-foreground)', opacity: 0.5 }}>▸</span>
+                    <a href={`mailto:${b.contact_email}`} className="truncate transition-colors hover:text-white" style={{ color: 'var(--foreground)' }}>
+                      {b.contact_email}
+                    </a>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: 'color-mix(in srgb, #22c55e 15%, transparent)', color: '#22c55e', border: '1px solid color-mix(in srgb, #22c55e 30%, transparent)' }}>
+                      found
+                    </span>
                   </div>
                 )}
                 {b.rating != null && (
