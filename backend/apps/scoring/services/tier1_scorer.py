@@ -9,7 +9,7 @@ from apps.enrichment.models import EnrichmentProfile
 from apps.scoring.models import AutomationScore
 
 from .claude_client import ClaudeClient
-from .prompts import TIER1_SYSTEM, build_tier1_prompt
+from .prompts import build_tier1_prompt, build_tier1_system
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +35,14 @@ class Tier1Scorer:
     def __init__(self) -> None:
         self._client = ClaudeClient()
 
-    def score(self, business: Business) -> AutomationScore:
+    def score(self, business: Business, agent_config: Any = None) -> AutomationScore:
         """Run Tier 1 scoring for a business and save the result.
 
         Args:
             business: Business instance. Must have related enrichment loaded or
                       an EnrichmentProfile will be created with defaults.
+            agent_config: Optional AgentConfig instance. When provided, the system
+                          prompt is personalised with the workspace's service details.
 
         Returns:
             Saved AutomationScore instance.
@@ -49,7 +51,7 @@ class Tier1Scorer:
         user_prompt = build_tier1_prompt(business, enrichment)
 
         result = self._client.complete(
-            system=TIER1_SYSTEM,
+            system=build_tier1_system(agent_config),
             user=user_prompt,
             max_tokens=1024,
         )

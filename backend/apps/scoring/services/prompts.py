@@ -3,19 +3,22 @@ from __future__ import annotations
 
 from typing import Any
 
-TIER1_SYSTEM = """You are an automation sales intelligence system evaluating local businesses for automation readiness.
+# ── Shared scoring sections ────────────────────────────────────────────────────
 
+_SCORING_CATEGORIES = """\
 You score businesses on their need for 4 automation categories:
 - CRM: lead tracking, follow-ups, customer relationship management
 - Scheduling: online booking, appointment management, calendar automation
 - Marketing: email campaigns, social media automation, review management
-- Invoicing: digital invoicing, payment processing, quote generation
+- Invoicing: digital invoicing, payment processing, quote generation"""
 
+_SCORING_RUBRIC = """\
 SCORING RUBRIC:
 HIGH (70-100): No tools detected, obviously manual processes, reviews mention pain points like slow response, missed follow-ups, scheduling issues. Ideal target.
 MEDIUM (40-69): Some tools present but gaps remain, partial automation, room for improvement.
-LOW (0-39): Already well automated, too small/inactive, or not a good fit.
+LOW (0-39): Already well automated, too small/inactive, or not a good fit."""
 
+_TIER1_OUTPUT_FORMAT = """\
 RESPOND WITH ONLY valid JSON matching this exact shape (no preamble, no markdown):
 {
   "overall_score": <0-100 integer>,
@@ -30,20 +33,7 @@ RESPOND WITH ONLY valid JSON matching this exact shape (no preamble, no markdown
   "estimated_deal_value": "<low|medium|high|enterprise>"
 }"""
 
-
-TIER2_SYSTEM = """You are a senior automation sales intelligence analyst producing deep-dive dossiers on local businesses.
-
-You score businesses on their need for 4 automation categories:
-- CRM: lead tracking, follow-ups, customer relationship management
-- Scheduling: online booking, appointment management, calendar automation
-- Marketing: email campaigns, social media automation, review management
-- Invoicing: digital invoicing, payment processing, quote generation
-
-SCORING RUBRIC:
-HIGH (70-100): No tools detected, obviously manual processes, reviews mention pain points like slow response, missed follow-ups, scheduling issues. Ideal target.
-MEDIUM (40-69): Some tools present but gaps remain, partial automation, room for improvement.
-LOW (0-39): Already well automated, too small/inactive, or not a good fit.
-
+_TIER2_EXTRA_INSTRUCTIONS = """\
 Your full_dossier must cover ALL of the following in multi-paragraph prose:
 1. Current operational state — how this business likely runs today based on all signals
 2. Automation gap analysis — specific gaps in CRM, scheduling, marketing, and invoicing
@@ -52,8 +42,9 @@ Your full_dossier must cover ALL of the following in multi-paragraph prose:
 5. ROI argument — quantifiable business impact in time saved, leads captured, revenue recovered
 6. Objection rebuttals — 2-3 anticipated objections and how to counter them
 
-Your competitor_analysis must cover: how similar local businesses in this market segment and geography typically compare on automation adoption, what best-in-class operators in this space use, and where this specific business ranks relative to peers.
+Your competitor_analysis must cover: how similar local businesses in this market segment and geography typically compare on automation adoption, what best-in-class operators in this space use, and where this specific business ranks relative to peers."""
 
+_TIER2_OUTPUT_FORMAT = """\
 RESPOND WITH ONLY valid JSON matching this exact shape (no preamble, no markdown):
 {
   "overall_score": <0-100 integer>,
@@ -70,6 +61,195 @@ RESPOND WITH ONLY valid JSON matching this exact shape (no preamble, no markdown
   "competitor_analysis": "<paragraph on how this business compares to similar local peers on automation adoption>"
 }"""
 
+_TONE_INSTRUCTIONS: dict[str, str] = {
+    "formal": (
+        "Write in a formal, professional tone. Use complete sentences. "
+        "No contractions. Address prospects respectfully."
+    ),
+    "semi_formal": (
+        "Write in a confident, friendly-but-professional tone. "
+        "Be approachable without being informal."
+    ),
+    "casual": (
+        "Write in a conversational, approachable tone. "
+        "First-name basis. Keep it natural and human."
+    ),
+}
+
+_EMAIL_RULES = """\
+RULES:
+- Under 150 words total
+- Reference one specific thing you know about their business (from the data provided)
+- Lead with their pain or gap, NOT your service
+- One clear CTA at the end (a 15-minute call, not a purchase)
+- No buzzwords: no "streamline", no "leverage", no "synergy", no "game-changer"
+- Sound like a person, not a press release
+- No spam triggers: no ALL CAPS, no excessive punctuation, no "FREE"
+
+RESPOND WITH ONLY valid JSON (no preamble, no markdown):
+{
+  "subject": "<email subject line>",
+  "body": "<full email body, use \\n for line breaks>"
+}"""
+
+_CALL_SCRIPT_STRUCTURE = """\
+STRUCTURE:
+- Opening (10 seconds): brief, honest intro
+- Hook: reference something specific about their business
+- Pain question: open-ended question that surfaces a real operational pain
+- Bridge: connect their pain to automation without pitching a product
+- CTA: ask for a 15-minute call to learn more
+- 2-3 objection handlers for: "not interested", "too busy", "already have something"
+
+RESPOND WITH ONLY valid JSON (no preamble, no markdown):
+{
+  "opening": "<10 second opening>",
+  "hook": "<specific reference to their business>",
+  "pain_question": "<open-ended pain question>",
+  "bridge": "<brief bridge connecting pain to solution>",
+  "cta": "<call to action for a short call>",
+  "objection_handlers": [
+    {"objection": "<objection>", "response": "<response>"}
+  ]
+}"""
+
+
+# ── Agent context helpers ──────────────────────────────────────────────────────
+
+def _agent_scoring_intro(agent_config: Any) -> str:
+    """Build the opening paragraph for scoring prompts from AgentConfig.
+
+    Falls back to generic automation-agency framing when no config is provided
+    or the workspace has not yet completed onboarding.
+    """
+    if not agent_config or not getattr(agent_config, "service_name", None):
+        return (
+            "You are an automation sales intelligence system evaluating local "
+            "businesses for automation readiness."
+        )
+
+    parts = [f"You are a B2B sales intelligence AI for {agent_config.service_name}."]
+    if agent_config.service_description:
+        parts.append(f"Your client sells: {agent_config.service_description}")
+    if agent_config.target_industries:
+        parts.append(f"Target industries: {', '.join(agent_config.target_industries)}")
+    if agent_config.target_biz_description:
+        parts.append(f"Ideal customer profile: {agent_config.target_biz_description}")
+    if agent_config.key_selling_points:
+        points = "\n".join(f"- {p}" for p in agent_config.key_selling_points)
+        parts.append(f"Key selling points:\n{points}")
+    if agent_config.custom_talking_points:
+        parts.append(f"Additional context: {agent_config.custom_talking_points}")
+
+    return "\n".join(parts)
+
+
+def _agent_outreach_intro(agent_config: Any, content_type: str) -> str:
+    """Build the opening paragraph for outreach prompts from AgentConfig.
+
+    Args:
+        agent_config: AgentConfig instance or None.
+        content_type: "email" or "call script" — used in the generic fallback.
+    """
+    if not agent_config or not getattr(agent_config, "service_name", None):
+        return (
+            f"You are a B2B cold {content_type} copywriter for a local business "
+            "automation consultant.\n\n"
+            f"Write a cold {content_type} to a local business owner about automation "
+            "services (CRM, scheduling, marketing, invoicing)."
+        )
+
+    service = agent_config.service_name
+    tone_key = getattr(agent_config, "outreach_tone", "semi_formal")
+    tone = _TONE_INSTRUCTIONS.get(tone_key, _TONE_INSTRUCTIONS["semi_formal"])
+
+    parts = [
+        f"You are a B2B cold {content_type} copywriter for {service}.",
+        f"Write a cold {content_type} to a local business owner about {service}.",
+    ]
+    if agent_config.service_description:
+        parts.append(f"What you're selling: {agent_config.service_description}")
+    if agent_config.key_selling_points:
+        points = "; ".join(agent_config.key_selling_points)
+        parts.append(f"Key selling points: {points}")
+    if agent_config.custom_talking_points:
+        parts.append(f"Additional context: {agent_config.custom_talking_points}")
+    parts.append(f"Tone: {tone}")
+
+    return "\n".join(parts)
+
+
+# ── Dynamic system prompt builders ────────────────────────────────────────────
+
+def build_tier1_system(agent_config: Any = None) -> str:
+    """Build Tier 1 scoring system prompt, injecting agent config when available.
+
+    Args:
+        agent_config: AgentConfig instance, or None for generic framing.
+
+    Returns:
+        Full system prompt string for the Tier 1 Claude call.
+    """
+    intro = _agent_scoring_intro(agent_config)
+    return f"{intro}\n\n{_SCORING_CATEGORIES}\n\n{_SCORING_RUBRIC}\n\n{_TIER1_OUTPUT_FORMAT}"
+
+
+def build_tier2_system(agent_config: Any = None) -> str:
+    """Build Tier 2 deep-analysis system prompt, injecting agent config when available.
+
+    Args:
+        agent_config: AgentConfig instance, or None for generic framing.
+
+    Returns:
+        Full system prompt string for the Tier 2 Claude call.
+    """
+    intro = _agent_scoring_intro(agent_config)
+    return (
+        f"{intro}\n\n"
+        f"{_SCORING_CATEGORIES}\n\n"
+        f"{_SCORING_RUBRIC}\n\n"
+        f"{_TIER2_EXTRA_INSTRUCTIONS}\n\n"
+        f"{_TIER2_OUTPUT_FORMAT}"
+    )
+
+
+def build_email_system(agent_config: Any = None) -> str:
+    """Build email outreach system prompt, injecting agent config when available.
+
+    Args:
+        agent_config: AgentConfig instance, or None for generic framing.
+
+    Returns:
+        Full system prompt string for the email Claude call.
+    """
+    intro = _agent_outreach_intro(agent_config, "email")
+    return f"{intro}\n\n{_EMAIL_RULES}"
+
+
+def build_call_script_system(agent_config: Any = None) -> str:
+    """Build call script system prompt, injecting agent config when available.
+
+    Args:
+        agent_config: AgentConfig instance, or None for generic framing.
+
+    Returns:
+        Full system prompt string for the call script Claude call.
+    """
+    intro = _agent_outreach_intro(agent_config, "call script")
+    return f"{intro}\n\n{_CALL_SCRIPT_STRUCTURE}"
+
+
+# ── Static constants (backwards-compat aliases) ───────────────────────────────
+# These preserve the same prompt content as before — callers that don't yet
+# pass an agent_config continue to work unchanged.
+
+TIER1_SYSTEM = build_tier1_system(None)
+TIER2_SYSTEM = build_tier2_system(None)
+EMAIL_SYSTEM = build_email_system(None)
+CALL_SCRIPT_SYSTEM = build_call_script_system(None)
+
+
+# ── User message builders ─────────────────────────────────────────────────────
 
 def build_tier2_prompt(business: Any, enrichment: Any, tier1_score: Any) -> str:
     """Build the user message for Tier 2 deep-analysis scoring.
@@ -185,53 +365,6 @@ def build_tier1_prompt(business: Any, enrichment: Any) -> str:
     ]
 
     return "\n".join(lines)
-
-
-# ── Outreach prompts ──────────────────────────────────────────────────────────
-
-EMAIL_SYSTEM = """You are a B2B cold email copywriter for a local business automation consultant.
-
-Write a cold email to a local business owner about automation services (CRM, scheduling, marketing, invoicing).
-
-RULES:
-- Under 150 words total
-- Reference one specific thing you know about their business (from the data provided)
-- Lead with their pain or gap, NOT your service
-- One clear CTA at the end (a 15-minute call, not a purchase)
-- No buzzwords: no "streamline", no "leverage", no "synergy", no "game-changer"
-- Sound like a person, not a press release
-- No spam triggers: no ALL CAPS, no excessive punctuation, no "FREE"
-
-RESPOND WITH ONLY valid JSON (no preamble, no markdown):
-{
-  "subject": "<email subject line>",
-  "body": "<full email body, use \\n for line breaks>"
-}"""
-
-
-CALL_SCRIPT_SYSTEM = """You are a cold call coach for a local business automation consultant.
-
-Write a cold call script targeting a local business owner about automation services (CRM, scheduling, marketing, invoicing).
-
-STRUCTURE:
-- Opening (10 seconds): brief, honest intro
-- Hook: reference something specific about their business
-- Pain question: open-ended question that surfaces a real operational pain
-- Bridge: connect their pain to automation without pitching a product
-- CTA: ask for a 15-minute call to learn more
-- 2-3 objection handlers for: "not interested", "too busy", "already have something"
-
-RESPOND WITH ONLY valid JSON (no preamble, no markdown):
-{
-  "opening": "<10 second opening>",
-  "hook": "<specific reference to their business>",
-  "pain_question": "<open-ended pain question>",
-  "bridge": "<brief bridge connecting pain to solution>",
-  "cta": "<call to action for a short call>",
-  "objection_handlers": [
-    {"objection": "<objection>", "response": "<response>"}
-  ]
-}"""
 
 
 def build_outreach_prompt(business: Any, tier1_score: Any) -> str:

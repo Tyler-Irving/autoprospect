@@ -287,3 +287,14 @@ export const useToasts = () => {
 
   return { message, success, warning, error, promise }
 }
+
+// Imperative API for use outside React components (e.g. Zustand stores)
+export const toast = {
+  success: (text) => { mountContainer(); toastStore.add(text, 'success') },
+  error: (text) => { mountContainer(); toastStore.add(text, 'error') },
+  warning: (text) => { mountContainer(); toastStore.add(text, 'warning') },
+  message: ({ text, preserve, action, onAction, onUndoAction }) => {
+    mountContainer()
+    toastStore.add(text, 'message', preserve, action, onAction, onUndoAction)
+  },
+}

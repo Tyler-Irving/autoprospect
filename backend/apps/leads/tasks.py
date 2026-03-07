@@ -30,18 +30,26 @@ def run_outreach_generation(lead_id: int) -> dict:
     from apps.leads.models import Lead, LeadActivity
     from apps.scoring.services.claude_client import ClaudeClient
     from apps.scoring.services.prompts import (
-        CALL_SCRIPT_SYSTEM,
-        EMAIL_SYSTEM,
+        build_email_system,
+        build_call_script_system,
         build_outreach_prompt,
     )
 
     lead = (
-        Lead.objects.select_related("business", "business__enrichment")
+        Lead.objects.select_related(
+            "business", "business__enrichment", "workspace__agent_config"
+        )
         .prefetch_related("business__scores")
         .get(pk=lead_id)
     )
 
     business = lead.business
+
+    agent_config = None
+    try:
+        agent_config = lead.workspace.agent_config
+    except AttributeError:
+        pass
 
     tier1 = None
     for score in business.scores.all():
@@ -52,8 +60,8 @@ def run_outreach_generation(lead_id: int) -> dict:
     client = ClaudeClient()
     prompt = build_outreach_prompt(business, tier1)
 
-    email_data = client.complete(EMAIL_SYSTEM, prompt, max_tokens=512)
-    call_data = client.complete(CALL_SCRIPT_SYSTEM, prompt, max_tokens=1024)
+    email_data = client.complete(build_email_system(agent_config), prompt, max_tokens=512)
+    call_data = client.complete(build_call_script_system(agent_config), prompt, max_tokens=1024)
 
     lead.generated_email_subject = email_data.get("subject", "")
     lead.generated_email = email_data.get("body", "")
