@@ -29,6 +29,13 @@ export default function MapPage() {
     if (activeScan?.status === 'discovering') setShowSearch(true)
   }, [activeScan?.status])
 
+  // Reset promote state when a new scan starts so stale promoted flags
+  // from a previous scan don't carry over to the new results.
+  useEffect(() => {
+    setPromoting({})
+    setPromoted({})
+  }, [activeScan?.id])
+
   const handlePromote = async (business) => {
     if (promoting[business.id] || promoted[business.id] || business.has_lead) return
     setPromoting((p) => ({ ...p, [business.id]: true }))

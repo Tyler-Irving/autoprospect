@@ -9,8 +9,12 @@ export const useScanStore = create((set, get) => ({
   pollTimer: null,
 
   loadScans: async () => {
-    const { data } = await scansApi.list()
-    set({ scans: data.results || data })
+    try {
+      const { data } = await scansApi.list()
+      set({ scans: data.results || data })
+    } catch {
+      // Non-fatal — page still renders, user can retry
+    }
   },
 
   launchScan: async (params) => {
