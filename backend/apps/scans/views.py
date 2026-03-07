@@ -52,9 +52,14 @@ def dashboard_stats(request):
 class ScanViewSet(viewsets.ModelViewSet):
     """CRUD + business listing for scans."""
 
-    queryset = Scan.objects.all()
     serializer_class = ScanSerializer
     http_method_names = ["get", "post", "delete", "head", "options"]
+
+    def get_queryset(self):
+        from django.db.models import Count
+        return Scan.objects.annotate(
+            lead_count=Count("businesses__lead", distinct=True)
+        ).order_by("-created_at")
 
     def create(self, request, *args, **kwargs):
         """Launch a new scan and enqueue the discovery task."""
@@ -114,3 +119,21 @@ class ScanViewSet(viewsets.ModelViewSet):
             qs = qs.order_by(sort)
             serializer = BusinessListSerializer(qs, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="rerun")
+    def rerun(self, request, pk=None):
+        """Create a new scan with the same parameters as an existing one."""
+        original = self.get_object()
+        new_scan = Scan.objects.create(
+            center_lat=original.center_lat,
+            center_lng=original.center_lng,
+            radius_meters=original.radius_meters,
+            place_types=original.place_types,
+            keyword=original.keyword,
+            label=f"{original.label} (re-run)" if original.label else "",
+        )
+        task = run_scan.delay(new_scan.pk)
+        new_scan.celery_task_id = task.id
+        new_scan.save(update_fields=["celery_task_id"])
+        logger.info("Re-run scan %d → new scan %d, task %s", original.pk, new_scan.pk, task.id)
+        return Response(ScanSerializer(new_scan).data, status=status.HTTP_201_CREATED)

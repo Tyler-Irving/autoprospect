@@ -8,6 +8,7 @@ class ScanSerializer(serializers.ModelSerializer):
     """Full scan serializer with computed progress."""
 
     progress_pct = serializers.ReadOnlyField()
+    lead_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Scan
@@ -27,6 +28,7 @@ class ScanSerializer(serializers.ModelSerializer):
             "error_message",
             "api_cost_cents",
             "progress_pct",
+            "lead_count",
             "created_at",
             "updated_at",
             "completed_at",
@@ -41,6 +43,7 @@ class ScanSerializer(serializers.ModelSerializer):
             "error_message",
             "api_cost_cents",
             "progress_pct",
+            "lead_count",
             "created_at",
             "updated_at",
             "completed_at",
