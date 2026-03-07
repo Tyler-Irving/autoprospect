@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "django_filters",
+    "anymail",
     # Local apps
     "apps.scans",
     "apps.businesses",
@@ -116,6 +117,14 @@ CELERY_TASK_ROUTES = {
 # External APIs
 GOOGLE_PLACES_API_KEY = env("GOOGLE_PLACES_API_KEY", default="")
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
+
+# Email — Resend via django-anymail
+EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+ANYMAIL = {
+    "RESEND_API_KEY": env("RESEND_API_KEY", default=""),
+}
+DEFAULT_FROM_EMAIL = env("EMAIL_FROM", default="")
+EMAIL_REPLY_TO = env("EMAIL_REPLY_TO", default="")
 
 # Budget
 MONTHLY_API_BUDGET_CENTS = env.int("MONTHLY_API_BUDGET_CENTS", default=30000)

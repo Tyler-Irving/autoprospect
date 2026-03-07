@@ -17,6 +17,10 @@ class LeadListSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "lead_count", "created_at"]
 
     def get_lead_count(self, obj) -> int:
+        # Use the prefetch cache when available to avoid an extra COUNT query.
+        prefetch_cache = getattr(obj, "_prefetched_objects_cache", {})
+        if "leads" in prefetch_cache:
+            return len(prefetch_cache["leads"])
         return obj.leads.count()
 
 
@@ -45,6 +49,7 @@ class LeadSerializer(serializers.ModelSerializer):
             "priority",
             "tags",
             "notes",
+            "contact_email",
             "last_contacted_at",
             "next_followup_at",
             "contact_attempts",
@@ -55,7 +60,11 @@ class LeadSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         from apps.businesses.models import Business
-        business = Business.objects.get(pk=validated_data.pop("business_id"))
+        from rest_framework import serializers as drf_serializers
+        try:
+            business = Business.objects.get(pk=validated_data.pop("business_id"))
+        except Business.DoesNotExist:
+            raise drf_serializers.ValidationError({"business_id": "Business not found."})
         lead = Lead.objects.create(business=business, **validated_data)
         LeadActivity.objects.create(
             lead=lead,

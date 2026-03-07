@@ -48,6 +48,7 @@ class Lead(models.Model):
     tags = models.JSONField(default=list)
     lists = models.ManyToManyField(LeadList, blank=True, related_name="leads")
     notes = models.TextField(blank=True)
+    contact_email = models.EmailField(blank=True)
     generated_email = models.TextField(blank=True)
     generated_email_subject = models.CharField(max_length=255, blank=True)
     generated_call_script = models.TextField(blank=True)
@@ -73,6 +74,7 @@ class LeadActivity(models.Model):
         CONTACTED = "contacted", "Contacted"
         TAG_ADDED = "tag_added", "Tag Added"
         TIER2_REQUESTED = "tier2_requested", "Tier 2 Requested"
+        EMAIL_SENT = "email_sent", "Email Sent"
 
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="activities")
     activity_type = models.CharField(max_length=30, choices=ActivityType.choices)

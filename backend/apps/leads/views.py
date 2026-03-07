@@ -82,6 +82,21 @@ class LeadViewSet(viewsets.ModelViewSet):
         serializer = LeadDetailSerializer(lead)
         return Response(serializer.data)
 
+    @action(detail=True, methods=["post"], url_path="send-email")
+    def send_email(self, request, pk=None):
+        """Send the generated cold email for this lead via Resend."""
+        lead = self.get_object()
+        try:
+            from apps.leads.services.email_sender import send_lead_email
+            send_lead_email(lead)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        lead.refresh_from_db()
+        serializer = LeadDetailSerializer(lead)
+        return Response(serializer.data)
+
     @action(detail=True, methods=["get"], url_path="activities")
     def activities(self, request, pk=None):
         lead = self.get_object()
@@ -102,25 +117,35 @@ class LeadViewSet(viewsets.ModelViewSet):
         leads = Lead.objects.filter(id__in=lead_ids)
 
         if action_name == "update_status":
-            leads.update(outreach_status=value)
+            valid_statuses = {c[0] for c in Lead.OutreachStatus.choices}
+            if value not in valid_statuses:
+                return Response({"detail": f"Invalid status '{value}'."}, status=400)
+            updated = leads.update(outreach_status=value)
         elif action_name == "update_priority":
-            leads.update(priority=value)
+            valid_priorities = {c[0] for c in Lead.Priority.choices}
+            if value not in valid_priorities:
+                return Response({"detail": f"Invalid priority '{value}'."}, status=400)
+            updated = leads.update(priority=value)
         elif action_name == "add_tag":
+            updated = 0
             for lead in leads:
                 if value not in lead.tags:
                     lead.tags.append(value)
                     lead.save(update_fields=["tags"])
+                updated += 1
         elif action_name == "add_to_list":
             try:
                 lead_list = LeadList.objects.get(pk=value)
+                updated = 0
                 for lead in leads:
                     lead.lists.add(lead_list)
+                    updated += 1
             except LeadList.DoesNotExist:
                 return Response({"detail": "List not found."}, status=404)
         else:
             return Response({"detail": f"Unknown action: {action_name}"}, status=400)
 
-        return Response({"updated": len(lead_ids)})
+        return Response({"updated": updated})
 
 
 class LeadListViewSet(viewsets.ModelViewSet):
