@@ -1,22 +1,37 @@
-"""Security tests for optional API key auth."""
+"""Security tests for JWT authentication."""
 import pytest
-from django.test import override_settings
+from django.contrib.auth.models import User
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
 
 
 @pytest.mark.django_db
-class TestAPIKeyAuth:
-    @override_settings(API_AUTH_TOKEN="secret-token")
-    def test_missing_token_denied(self):
+class TestJWTAuth:
+    def test_unauthenticated_returns_401(self):
         resp = APIClient().get("/api/scans/")
-        assert resp.status_code == 403
+        assert resp.status_code == 401
 
-    @override_settings(API_AUTH_TOKEN="secret-token")
-    def test_bearer_token_allows_access(self):
-        resp = APIClient().get("/api/scans/", HTTP_AUTHORIZATION="Bearer secret-token")
+    def test_invalid_token_returns_401(self):
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION="Bearer not-a-valid-jwt")
+        resp = client.get("/api/scans/")
+        assert resp.status_code == 401
+
+    def test_valid_jwt_allows_access(self, api_client):
+        resp = api_client.get("/api/scans/")
         assert resp.status_code == 200
 
-    @override_settings(API_AUTH_TOKEN="secret-token")
-    def test_x_api_key_allows_access(self):
-        resp = APIClient().get("/api/scans/", HTTP_X_API_KEY="secret-token")
-        assert resp.status_code == 200
+    def test_expired_access_token_returns_401(self, db):
+        """An expired token is rejected even if the user exists."""
+        from datetime import timedelta
+        from django.utils import timezone
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        user = User.objects.create_user(username="github_expired")
+        token = AccessToken.for_user(user)
+        # Manually backdate the expiry
+        token.set_exp(lifetime=-timedelta(seconds=1))
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(token)}")
+        resp = client.get("/api/scans/")
+        assert resp.status_code == 401

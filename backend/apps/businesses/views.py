@@ -5,7 +5,8 @@ import re
 import httpx
 from django.conf import settings
 from rest_framework import status, viewsets
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .models import Business
@@ -20,6 +21,7 @@ _PLACE_ID_RE = re.compile(r"^[A-Za-z0-9_\-:.+/=]{3,255}$")
 
 
 @api_view(["GET"])
+@permission_classes([AllowAny])
 def places_autocomplete(request):
     """Proxy Google Places autocomplete so the API key stays server-side.
 
@@ -68,6 +70,7 @@ def places_autocomplete(request):
 
 
 @api_view(["GET"])
+@permission_classes([AllowAny])
 def places_geocode(request):
     """Return lat/lng for a Google place_id.
 
@@ -116,7 +119,10 @@ class BusinessViewSet(viewsets.ReadOnlyModelViewSet):
         return BusinessListSerializer
 
     def get_queryset(self):
-        qs = super().get_queryset().filter(scan__owner=self.request.user)
+        workspace = self.request.workspace
+        if workspace is None:
+            return super().get_queryset().none()
+        qs = super().get_queryset().filter(scan__workspace=workspace)
         params = self.request.query_params
 
         scan_id = params.get("scan")
@@ -157,7 +163,11 @@ class BusinessViewSet(viewsets.ReadOnlyModelViewSet):
         if hasattr(business, "lead"):
             return Response({"lead_id": business.lead.id, "already_lead": True})
 
-        lead = Lead.objects.create(business=business, owner=request.user)
+        lead = Lead.objects.create(
+            business=business,
+            owner=request.user,
+            workspace=request.workspace,
+        )
 
         # Auto-populate contact email from enrichment crawl if available
         enrichment = getattr(business, "enrichment", None)

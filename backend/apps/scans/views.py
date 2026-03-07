@@ -81,24 +81,30 @@ def dashboard_stats(request):
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    user = request.user
-    user_leads = Lead.objects.filter(owner=user)
-    user_scans = Scan.objects.filter(owner=user)
+    workspace = request.workspace
+    if workspace is None:
+        return Response({
+            "total_businesses_scanned": 0, "total_leads": 0, "leads_by_status": {},
+            "avg_automation_score": None, "monthly_api_cost_cents": 0, "scans_this_month": 0,
+        })
 
-    total_leads = user_leads.count()
+    workspace_leads = Lead.objects.filter(workspace=workspace)
+    workspace_scans = Scan.objects.filter(workspace=workspace)
+
+    total_leads = workspace_leads.count()
     leads_by_status = dict(
-        user_leads.values_list("outreach_status").annotate(n=Count("id")).values_list("outreach_status", "n")
+        workspace_leads.values_list("outreach_status").annotate(n=Count("id")).values_list("outreach_status", "n")
     )
 
     avg_score = AutomationScore.objects.filter(
-        tier="tier1", business__scan__owner=user
+        tier="tier1", business__scan__workspace=workspace
     ).aggregate(avg=Avg("overall_score"))["avg"]
 
     monthly_cost = (
-        user_scans.filter(created_at__gte=month_start).aggregate(total=Sum("api_cost_cents"))["total"] or 0
+        workspace_scans.filter(created_at__gte=month_start).aggregate(total=Sum("api_cost_cents"))["total"] or 0
     )
-    scans_this_month = user_scans.filter(created_at__gte=month_start).count()
-    total_businesses_scanned = user_scans.aggregate(total=Sum("businesses_found"))["total"] or 0
+    scans_this_month = workspace_scans.filter(created_at__gte=month_start).count()
+    total_businesses_scanned = workspace_scans.aggregate(total=Sum("businesses_found"))["total"] or 0
 
     return Response({
         "total_businesses_scanned": total_businesses_scanned,
@@ -118,7 +124,9 @@ class ScanViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         from django.db.models import Count
-        return Scan.objects.filter(owner=self.request.user).annotate(
+        workspace = self.request.workspace
+        qs = Scan.objects.filter(workspace=workspace) if workspace else Scan.objects.none()
+        return qs.annotate(
             lead_count=Count("businesses__lead", distinct=True)
         ).order_by("-created_at")
 
@@ -126,7 +134,7 @@ class ScanViewSet(viewsets.ModelViewSet):
         """Launch a new scan and enqueue the discovery task."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        scan = serializer.save(owner=request.user)
+        scan = serializer.save(owner=request.user, workspace=request.workspace)
 
         # Enqueue the scan task
         task = run_scan.delay(scan.pk)
@@ -194,6 +202,8 @@ class ScanViewSet(viewsets.ModelViewSet):
             place_types=original.place_types,
             keyword=original.keyword,
             label=f"{original.label} (re-run)" if original.label else "",
+            owner=request.user,
+            workspace=request.workspace,
         )
         task = run_scan.delay(new_scan.pk)
         new_scan.celery_task_id = task.id

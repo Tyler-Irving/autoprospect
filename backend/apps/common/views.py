@@ -110,15 +110,25 @@ def github_login(request):
         user.email = github_email
         user.save(update_fields=["first_name", "last_name", "email"])
 
-    # First ever user: claim all existing orphaned records so no data is lost
+    # Get or create the user's workspace
+    from apps.workspaces.services import claim_orphaned_records, get_or_create_workspace_for_user
+    workspace = get_or_create_workspace_for_user(user)
+
+    # First ever user: claim all pre-multitenancy records so no data is lost
     if created and User.objects.count() == 1:
         _claim_orphaned_records(user)
+        claim_orphaned_records(user, workspace)
 
     refresh = RefreshToken.for_user(user)
     return Response({
         "access": str(refresh.access_token),
         "refresh": str(refresh),
         "user": _user_payload(user),
+        "workspace": {
+            "id": workspace.pk,
+            "name": workspace.name,
+            "slug": workspace.slug,
+        },
     })
 
 
@@ -130,18 +140,24 @@ def me(request):
 
 
 def _claim_orphaned_records(user: User) -> None:
-    """Assign all owner-less records to the first user who logs in.
+    """Assign all owner-less and workspace-less records to the first user who logs in.
 
     This handles the transition from the single-user tool to multi-user without
     losing any previously created scans or leads.
     """
     from apps.leads.models import Lead, LeadList
     from apps.scans.models import Scan
+    from apps.workspaces.services import get_or_create_workspace_for_user
 
-    scan_count = Scan.objects.filter(owner__isnull=True).update(owner=user)
-    lead_count = Lead.objects.filter(owner__isnull=True).update(owner=user)
-    LeadList.objects.filter(owner__isnull=True).update(owner=user)
+    workspace = get_or_create_workspace_for_user(user)
+
+    scan_count = Scan.objects.filter(owner__isnull=True).update(owner=user, workspace=workspace)
+    Scan.objects.filter(workspace__isnull=True).update(workspace=workspace)
+    lead_count = Lead.objects.filter(owner__isnull=True).update(owner=user, workspace=workspace)
+    Lead.objects.filter(workspace__isnull=True).update(workspace=workspace)
+    LeadList.objects.filter(owner__isnull=True).update(owner=user, workspace=workspace)
+    LeadList.objects.filter(workspace__isnull=True).update(workspace=workspace)
     logger.info(
-        "Claimed %d scans and %d leads for first user %s",
-        scan_count, lead_count, user.username,
+        "Claimed %d scans and %d leads for first user %s (workspace %s)",
+        scan_count, lead_count, user.username, workspace.slug,
     )

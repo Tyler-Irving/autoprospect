@@ -1,12 +1,6 @@
 """Tests for Businesses API endpoints."""
 import pytest
 from unittest.mock import patch
-from rest_framework.test import APIClient
-
-
-@pytest.fixture
-def api_client():
-    return APIClient()
 
 
 @pytest.mark.django_db

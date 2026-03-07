@@ -29,8 +29,11 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_filters",
     "anymail",
+    "django_celery_beat",
     # Local apps
     "apps.common",
+    "apps.workspaces",
+    "apps.agents",
     "apps.scans",
     "apps.businesses",
     "apps.enrichment",
@@ -47,6 +50,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.workspaces.middleware.WorkspaceMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -145,12 +149,14 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_TASK_ROUTES = {
     "apps.enrichment.tasks.*": {"queue": "enrichment"},
     "apps.scoring.tasks.*": {"queue": "scoring"},
     "apps.scans.tasks.*": {"queue": "default"},
     "apps.businesses.tasks.*": {"queue": "default"},
     "apps.leads.tasks.*": {"queue": "default"},
+    "apps.agents.tasks.*": {"queue": "default"},
 }
 
 # External APIs

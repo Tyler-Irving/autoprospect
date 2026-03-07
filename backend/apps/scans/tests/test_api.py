@@ -1,15 +1,8 @@
 """Tests for Scans API endpoints."""
 import pytest
-from django.urls import reverse
-from rest_framework.test import APIClient
 from unittest.mock import patch
 
 from apps.scans.models import Scan
-
-
-@pytest.fixture
-def api_client():
-    return APIClient()
 
 
 @pytest.mark.django_db

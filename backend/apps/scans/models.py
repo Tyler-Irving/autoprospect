@@ -31,6 +31,14 @@ class Scan(models.Model):
     owner = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.SET_NULL, related_name="scans"
     )
+    workspace = models.ForeignKey(
+        "workspaces.Workspace",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="scans",
+    )
+    trigger_type = models.CharField(max_length=20, default="manual")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
