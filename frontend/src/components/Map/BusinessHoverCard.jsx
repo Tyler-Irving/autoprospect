@@ -8,14 +8,14 @@ function ScoreBar({ label, score }) {
   if (score === null || score === undefined) return null
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-slate-400 w-20 shrink-0">{label}</span>
-      <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+      <span className="text-xs w-20 shrink-0" style={{ color: 'var(--muted-foreground)' }}>{label}</span>
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--secondary)' }}>
         <div
           className="h-full rounded-full"
           style={{ width: `${score}%`, background: getScoreColor(score) }}
         />
       </div>
-      <span className="text-xs font-mono text-slate-300 w-6 text-right">{score}</span>
+      <span className="text-xs font-mono w-6 text-right" style={{ color: 'var(--foreground)' }}>{score}</span>
     </div>
   )
 }
@@ -75,17 +75,20 @@ export default function BusinessHoverCard() {
       className="fixed z-[9999] w-80"
       style={{ left: hoverPosition.x, top: hoverPosition.y, pointerEvents: 'none' }}
     >
-      <div className="bg-slate-900/95 backdrop-blur-sm border border-slate-700/80 rounded-xl shadow-2xl shadow-black/60 overflow-hidden">
+      <div className="backdrop-blur-sm rounded-xl shadow-2xl shadow-black/60 overflow-hidden" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
 
         {/* Header */}
         <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             {category && (
-              <span className="inline-block text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 mb-1 uppercase tracking-wide font-medium">
+              <span
+                className="inline-block text-[10px] px-1.5 py-0.5 rounded mb-1 uppercase tracking-wide font-medium"
+                style={{ background: 'var(--secondary)', color: 'var(--muted-foreground)' }}
+              >
                 {category}
               </span>
             )}
-            <h3 className="text-sm font-semibold text-white leading-snug">{b.name}</h3>
+            <h3 className="text-sm font-semibold leading-snug" style={{ color: 'var(--foreground)' }}>{b.name}</h3>
           </div>
           <div className="flex flex-col items-end shrink-0">
             {b.overall_score !== null && b.overall_score !== undefined ? (
@@ -101,7 +104,7 @@ export default function BusinessHoverCard() {
                 </span>
               </>
             ) : (
-              <span className="text-xs text-slate-500 pt-1">Unscored</span>
+              <span className="text-xs pt-1" style={{ color: 'var(--muted-foreground)' }}>Unscored</span>
             )}
           </div>
         </div>
@@ -109,19 +112,19 @@ export default function BusinessHoverCard() {
         {/* Details row */}
         <div className="px-4 pb-3 space-y-1.5">
           {b.formatted_address && (
-            <div className="flex items-start gap-1.5 text-xs text-slate-400">
+            <div className="flex items-start gap-1.5 text-xs" style={{ color: 'var(--muted-foreground)' }}>
               <span className="shrink-0 mt-px">📍</span>
               <span className="leading-snug">{b.formatted_address}</span>
             </div>
           )}
           {(b.rating || b.phone_number) && (
-            <div className="flex items-center gap-4 text-xs text-slate-400">
+            <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--muted-foreground)' }}>
               {b.rating && (
                 <span className="flex items-center gap-1">
                   <span className="text-yellow-400">★</span>
-                  <span className="text-slate-300 font-medium">{b.rating}</span>
+                  <span className="font-medium" style={{ color: 'var(--foreground)' }}>{b.rating}</span>
                   {b.total_reviews > 0 && (
-                    <span className="text-slate-500">· {b.total_reviews.toLocaleString()}</span>
+                    <span style={{ color: 'var(--muted-foreground)' }}>· {b.total_reviews.toLocaleString()}</span>
                   )}
                 </span>
               )}
@@ -134,7 +137,7 @@ export default function BusinessHoverCard() {
             </div>
           )}
           {websiteDisplay && (
-            <div className="flex items-center gap-1.5 text-xs text-blue-400">
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: '#f97316' }}>
               <span>🌐</span>
               <span className="truncate">{websiteDisplay}</span>
             </div>
@@ -144,9 +147,9 @@ export default function BusinessHoverCard() {
         {/* Sub-scores */}
         {score && (
           <>
-            <div className="border-t border-slate-800" />
+            <div style={{ borderTop: '1px solid var(--border)' }} />
             <div className="px-4 py-3 space-y-2">
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">
+              <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--muted-foreground)' }}>
                 Automation Readiness
               </span>
               <div className="space-y-1.5 pt-0.5">
@@ -162,13 +165,18 @@ export default function BusinessHoverCard() {
         {/* Key signals */}
         {score?.key_signals?.length > 0 && (
           <>
-            <div className="border-t border-slate-800" />
+            <div style={{ borderTop: '1px solid var(--border)' }} />
             <div className="px-4 py-2.5">
               <div className="flex flex-wrap gap-1">
                 {score.key_signals.map((signal) => (
                   <span
                     key={signal}
-                    className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60"
+                    className="text-[11px] px-2 py-0.5 rounded-full"
+                    style={{
+                      background: 'var(--secondary)',
+                      color: 'var(--foreground)',
+                      border: '1px solid var(--border)',
+                    }}
                   >
                     {signal}
                   </span>
@@ -181,9 +189,9 @@ export default function BusinessHoverCard() {
         {/* AI summary */}
         {score?.summary && (
           <>
-            <div className="border-t border-slate-800" />
+            <div style={{ borderTop: '1px solid var(--border)' }} />
             <div className="px-4 py-2.5">
-              <p className="text-xs text-slate-400 leading-relaxed line-clamp-3 italic">
+              <p className="text-xs leading-relaxed line-clamp-3 italic" style={{ color: 'var(--muted-foreground)' }}>
                 &ldquo;{score.summary}&rdquo;
               </p>
             </div>
@@ -192,8 +200,11 @@ export default function BusinessHoverCard() {
 
         {/* Deal value footer */}
         {score?.estimated_deal_value && (
-          <div className="px-4 py-2 bg-slate-800/60 border-t border-slate-800 flex items-center justify-between">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wide font-medium">
+          <div
+            className="px-4 py-2 flex items-center justify-between"
+            style={{ background: 'var(--secondary)', borderTop: '1px solid var(--border)' }}
+          >
+            <span className="text-[10px] uppercase tracking-wide font-medium" style={{ color: 'var(--muted-foreground)' }}>
               Deal potential
             </span>
             <span
@@ -205,7 +216,7 @@ export default function BusinessHoverCard() {
         )}
 
         {/* Promote button */}
-        <div className="px-4 py-2.5 border-t border-slate-800" style={{ pointerEvents: 'auto' }}>
+        <div className="px-4 py-2.5" style={{ borderTop: '1px solid var(--border)', pointerEvents: 'auto' }}>
           <button
             onClick={handlePromote}
             disabled={promoting || promoted || b.has_lead}

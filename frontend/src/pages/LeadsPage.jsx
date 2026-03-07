@@ -42,10 +42,10 @@ const PRIORITY_COLORS = {
 
 function StatCard({ label, value, sub }) {
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl px-5 py-4">
-      <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-1">{label}</p>
-      <p className="text-2xl font-bold text-white">{value ?? '—'}</p>
-      {sub && <p className="text-xs text-slate-500 mt-0.5">{sub}</p>}
+    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius, 0.625rem)' }} className="px-5 py-4">
+      <p className="text-xs uppercase tracking-wide font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>{label}</p>
+      <p className="text-2xl font-bold" style={{ color: 'var(--foreground)', fontFamily: "'Geist Mono', ui-monospace, monospace" }}>{value ?? '—'}</p>
+      {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>{sub}</p>}
     </div>
   )
 }
@@ -78,13 +78,13 @@ export default function LeadsPage() {
   }
 
   return (
-    <div className="h-full overflow-auto bg-slate-950 p-6">
+    <div className="h-full overflow-auto p-6" style={{ background: 'var(--background)' }}>
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-100">Lead Pipeline</h1>
-          <span className="text-sm text-slate-500">{leads.length} lead{leads.length !== 1 ? 's' : ''}</span>
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>Lead Pipeline</h1>
+          <span className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{leads.length} lead{leads.length !== 1 ? 's' : ''}</span>
         </div>
 
         {/* Stats row */}
@@ -114,7 +114,8 @@ export default function LeadsPage() {
           <select
             value={filters.status}
             onChange={(e) => setFilters({ status: e.target.value })}
-            className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="text-sm px-3 py-1.5 focus:outline-none"
+            style={{ background: 'var(--secondary)', border: '1px solid var(--border)', color: 'var(--foreground)', borderRadius: '0.5rem' }}
           >
             {STATUS_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -124,7 +125,8 @@ export default function LeadsPage() {
           <select
             value={filters.minScore}
             onChange={(e) => setFilters({ minScore: e.target.value })}
-            className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-blue-500"
+            className="text-sm px-3 py-1.5 focus:outline-none"
+            style={{ background: 'var(--secondary)', border: '1px solid var(--border)', color: 'var(--foreground)', borderRadius: '0.5rem' }}
           >
             <option value="">All scores</option>
             <option value="70">High (70+)</option>
@@ -134,27 +136,27 @@ export default function LeadsPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
           {isLoading ? (
-            <div className="p-8 text-center text-slate-500 text-sm">Loading leads…</div>
+            <div className="p-8 text-center text-sm" style={{ color: 'var(--muted-foreground)' }}>Loading leads…</div>
           ) : leads.length === 0 ? (
             <div className="p-8 text-center">
-              <p className="text-slate-400 text-sm">No leads yet.</p>
-              <p className="text-slate-600 text-xs mt-1">Hover over a business on the map and click "Add to Leads".</p>
+              <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>No leads yet.</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>Hover over a business on the map and click "Add to Leads".</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-800 text-left">
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Business</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Score</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Status</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Priority</th>
-                  <th className="px-4 py-3 text-xs font-medium text-slate-500 uppercase tracking-wide">Added</th>
+                <tr className="text-left" style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Business</th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Score</th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Status</th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Priority</th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Added</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
                 {leads.map((lead) => {
                   const score = lead.business?.overall_score
                   const scoreColor = getScoreColor(score)
@@ -162,15 +164,15 @@ export default function LeadsPage() {
                   const addedDate = new Date(lead.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
                   return (
-                    <tr key={lead.id} className="hover:bg-slate-800/50 transition-colors group">
+                    <tr key={lead.id} className="transition-colors group border-b" style={{ borderColor: 'var(--border)' }}>
                       <td className="px-4 py-3">
                         <Link to={`/leads/${lead.id}`} className="block">
-                          <div className="font-medium text-slate-100 leading-snug group-hover:text-blue-400 transition-colors">
+                          <div className="font-medium leading-snug group-hover:text-[#f97316] transition-colors" style={{ color: 'var(--foreground)' }}>
                             {lead.business?.name}
                           </div>
-                          <div className="text-xs text-slate-500 mt-0.5 capitalize">{category}</div>
+                          <div className="text-xs mt-0.5 capitalize" style={{ color: 'var(--muted-foreground)' }}>{category}</div>
                           {lead.business?.phone_number && (
-                            <div className="text-xs text-slate-600 mt-0.5">{lead.business.phone_number}</div>
+                            <div className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>{lead.business.phone_number}</div>
                           )}
                         </Link>
                       </td>
@@ -181,7 +183,7 @@ export default function LeadsPage() {
                             <span className="text-[10px] font-medium" style={{ color: scoreColor }}>{getScoreLabel(score)}</span>
                           </div>
                         ) : (
-                          <span className="text-xs text-slate-600">—</span>
+                          <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>—</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -208,11 +210,12 @@ export default function LeadsPage() {
                           ))}
                         </select>
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{addedDate}</td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--muted-foreground)' }}>{addedDate}</td>
                       <td className="px-4 py-3 text-right">
                         <Link
                           to={`/leads/${lead.id}`}
-                          className="text-xs text-slate-500 hover:text-blue-400 transition-colors px-2"
+                          className="text-xs transition-colors px-2 hover:text-[#f97316]"
+                          style={{ color: 'var(--muted-foreground)' }}
                         >
                           View →
                         </Link>

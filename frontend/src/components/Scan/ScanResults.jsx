@@ -21,7 +21,7 @@ export default function ScanResults({ promoting, promoted, onPromote }) {
 
       {/* Summary */}
       <div className="flex items-baseline justify-between shrink-0">
-        <span className="text-xs font-semibold text-slate-300">{markers.length} businesses</span>
+        <span className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>{markers.length} businesses</span>
         <div className="flex gap-2 text-[10px]">
           {highCount > 0 && <span className="text-green-400 font-medium">{highCount} high</span>}
           {medCount > 0 && <span className="text-yellow-400 font-medium">{medCount} med</span>}
@@ -42,19 +42,22 @@ export default function ScanResults({ promoting, promoted, onPromote }) {
             <div
               key={business.id}
               onClick={() => setSelectedBusiness(isSelected ? null : business)}
-              className={`flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg cursor-pointer transition-colors border ${
+              className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg cursor-pointer transition-colors border"
+              style={
                 isSelected
-                  ? 'bg-slate-700 border-slate-600'
-                  : 'bg-slate-800/60 border-transparent hover:bg-slate-800 hover:border-slate-700'
-              }`}
+                  ? { background: 'var(--secondary)', borderColor: 'var(--border)' }
+                  : { background: 'transparent', borderColor: 'transparent' }
+              }
+              onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.background = 'var(--secondary)'; e.currentTarget.style.borderColor = 'var(--border)' } }}
+              onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent' } }}
             >
               {/* Score badge */}
               <div
                 className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
                 style={{
-                  background: score != null ? `${scoreColor}20` : '#1e293b',
-                  color: score != null ? scoreColor : '#475569',
-                  border: `1px solid ${score != null ? scoreColor + '40' : '#334155'}`,
+                  background: score != null ? `${scoreColor}20` : 'var(--secondary)',
+                  color: score != null ? scoreColor : 'var(--muted-foreground)',
+                  border: `1px solid ${score != null ? scoreColor + '40' : 'var(--border)'}`,
                 }}
               >
                 {score ?? '—'}
@@ -62,12 +65,12 @@ export default function ScanResults({ promoting, promoted, onPromote }) {
 
               {/* Name + meta */}
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-slate-200 truncate leading-snug">
+                <div className="text-xs font-medium truncate leading-snug" style={{ color: 'var(--foreground)' }}>
                   {business.name}
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   {category && (
-                    <span className="text-[10px] text-slate-500 capitalize truncate">{category}</span>
+                    <span className="text-[10px] capitalize truncate" style={{ color: 'var(--muted-foreground)' }}>{category}</span>
                   )}
                   {isPromoted && (
                     <span className="text-[10px] text-green-500 font-medium shrink-0">In Leads</span>
@@ -83,8 +86,9 @@ export default function ScanResults({ promoting, promoted, onPromote }) {
                 className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-colors ${
                   isPromoted
                     ? 'text-green-500 bg-green-900/20 cursor-default'
-                    : 'text-slate-500 bg-slate-700 hover:bg-blue-600 hover:text-white'
+                    : 'hover:bg-blue-600 hover:text-white'
                 }`}
+                style={!isPromoted ? { color: 'var(--muted-foreground)', background: 'var(--secondary)' } : {}}
               >
                 {isPromoting ? '…' : isPromoted ? '✓' : '+'}
               </button>
