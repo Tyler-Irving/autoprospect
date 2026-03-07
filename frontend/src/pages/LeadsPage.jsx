@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLeadStore } from '../store/leadStore'
 import { scansApi } from '../api/scans'
 import { getScoreColor, getScoreLabel } from '../utils/constants'
-import toast from 'react-hot-toast'
+import { useToasts } from '@/components/ui/toast'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -52,6 +52,7 @@ function StatCard({ label, value, sub }) {
 
 export default function LeadsPage() {
   const { leads, filters, isLoading, setFilters, fetchLeads, updateLead } = useLeadStore()
+  const toasts = useToasts()
   const [stats, setStats] = useState(null)
   const isMounted = useRef(false)
 
@@ -73,7 +74,7 @@ export default function LeadsPage() {
     try {
       await updateLead(leadId, { outreach_status: newStatus })
     } catch {
-      toast.error('Failed to update status')
+      toasts.error('Failed to update status')
     }
   }
 

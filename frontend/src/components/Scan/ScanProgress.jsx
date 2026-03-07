@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import toast from 'react-hot-toast'
+import { useToasts } from '@/components/ui/toast'
 import { useScanStore } from '../../store/scanStore'
 
 const STATUS_LABELS = {
@@ -13,6 +13,7 @@ const STATUS_LABELS = {
 
 export default function ScanProgress() {
   const { activeScan, setActiveScan, rerunScan } = useScanStore()
+  const toasts = useToasts()
   const [retrying, setRetrying] = useState(false)
 
   if (!activeScan) return null
@@ -24,9 +25,9 @@ export default function ScanProgress() {
     setRetrying(true)
     try {
       await rerunScan(activeScan.id)
-      toast.success('Scan restarted')
+      toasts.success('Scan restarted')
     } catch {
-      toast.error('Failed to restart scan')
+      toasts.error('Failed to restart scan')
     } finally {
       setRetrying(false)
     }

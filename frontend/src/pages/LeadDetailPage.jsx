@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import toast from 'react-hot-toast'
+import { useToasts } from '@/components/ui/toast'
 import { useLeadStore } from '../store/leadStore'
 import { getScoreColor, getScoreLabel } from '../utils/constants'
 import { businessesApi } from '../api/businesses'
@@ -45,6 +45,7 @@ export default function LeadDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { selectedLead: lead, fetchLead, updateLead, deleteLead, generateOutreach, sendEmail, clearSelected } = useLeadStore()
+  const toasts = useToasts()
   const [notes, setNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -67,7 +68,7 @@ export default function LeadDetailPage() {
   }, [])
 
   useEffect(() => {
-    fetchLead(id).catch(() => toast.error('Failed to load lead'))
+    fetchLead(id).catch(() => toasts.error('Failed to load lead'))
     return () => clearSelected()
   }, [id])
 
@@ -88,7 +89,7 @@ export default function LeadDetailPage() {
         if (!updated?.business?.tier2_pending) {
           clearInterval(tier2PollRef.current)
           if (updated?.business?.tier2_score) {
-            toast.success('Deep analysis complete')
+            toasts.success('Deep analysis complete')
           }
         }
       } catch {
@@ -118,9 +119,9 @@ export default function LeadDetailPage() {
     setSavingNotes(true)
     try {
       await updateLead(lead.id, { notes })
-      toast.success('Notes saved')
+      toasts.success('Notes saved')
     } catch {
-      toast.error('Failed to save notes')
+      toasts.error('Failed to save notes')
     } finally {
       setSavingNotes(false)
     }
@@ -132,7 +133,7 @@ export default function LeadDetailPage() {
     const businessName = b?.name
     const promise = generateOutreach(lead.id)
     promise.finally(() => { if (mountedRef.current) setGenerating(false) })
-    toast.promise(promise, {
+    toasts.promise(promise, {
       loading: `Generating outreach for ${businessName}…`,
       success: `Outreach ready for ${businessName}`,
       error: (err) => err?.response?.data?.detail || `Failed to generate outreach for ${businessName}`,
@@ -141,8 +142,8 @@ export default function LeadDetailPage() {
 
   const handleCopy = (text, label) => {
     navigator.clipboard.writeText(text)
-      .then(() => toast.success(`${label} copied`))
-      .catch(() => toast.error('Copy failed — check browser permissions'))
+      .then(() => toasts.success(`${label} copied`))
+      .catch(() => toasts.error('Copy failed — check browser permissions'))
   }
 
   const handleContactEmailBlur = async () => {
@@ -156,7 +157,7 @@ export default function LeadDetailPage() {
     const businessName = b?.name
     const promise = sendEmail(lead.id)
     promise.finally(() => { if (mountedRef.current) setSending(false) })
-    toast.promise(promise, {
+    toasts.promise(promise, {
       loading: `Sending email to ${businessName}…`,
       success: `Email sent to ${businessName}`,
       error: (err) => err?.response?.data?.detail || `Failed to send email to ${businessName}`,
@@ -167,9 +168,9 @@ export default function LeadDetailPage() {
     try {
       await businessesApi.enrichTier2(b.id)
       await fetchLead(id)
-      toast.success('Deep analysis complete')
+      toasts.success('Deep analysis complete')
     } catch {
-      toast.error('Deep analysis failed')
+      toasts.error('Deep analysis failed')
     }
   }
 
@@ -177,10 +178,10 @@ export default function LeadDetailPage() {
     if (!window.confirm(`Remove ${b?.name} from leads?`)) return
     try {
       await deleteLead(lead.id)
-      toast.success('Lead removed')
+      toasts.success('Lead removed')
       navigate('/leads')
     } catch {
-      toast.error('Failed to remove lead')
+      toasts.error('Failed to remove lead')
     }
   }
 

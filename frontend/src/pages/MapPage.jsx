@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import toast from 'react-hot-toast'
+import { useToasts } from '@/components/ui/toast'
 import MapView from '../components/Map/MapView'
 import SearchControls from '../components/Map/SearchControls'
 import BusinessHoverCard from '../components/Map/BusinessHoverCard'
@@ -14,6 +14,7 @@ export default function MapPage() {
   const { activeScan } = useScanStore()
   const { markers, selectedBusiness, setSelectedBusiness, setClickMode, clickModeActive } = useMapStore()
   const { promoteBusiness } = useLeadStore()
+  const toasts = useToasts()
   const [showSearch, setShowSearch] = useState(true)
   const [promoting, setPromoting] = useState({})
   const [promoted, setPromoted] = useState({})
@@ -49,9 +50,9 @@ export default function MapPage() {
     try {
       await promoteBusiness(business.id)
       setPromoted((p) => ({ ...p, [business.id]: true }))
-      toast.success(`${business.name} added to leads`)
+      toasts.success(`${business.name} added to leads`)
     } catch {
-      toast.error('Failed to add lead')
+      toasts.error('Failed to add lead')
     } finally {
       setPromoting((p) => ({ ...p, [business.id]: false }))
     }

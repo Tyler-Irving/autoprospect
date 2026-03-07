@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import toast from 'react-hot-toast'
+import { useToasts } from '@/components/ui/toast'
 import { settingsApi } from '../api/settings'
 
 function KeyRow({ label, masked, isSet }) {
@@ -34,6 +34,7 @@ function Section({ title, children }) {
 }
 
 export default function SettingsPage() {
+  const toasts = useToasts()
   const [config, setConfig] = useState(null)
   const [budget, setBudget] = useState('')
   const [maxBusinesses, setMaxBusinesses] = useState('')
@@ -46,7 +47,7 @@ export default function SettingsPage() {
         setBudget(String(Math.round(data.monthly_budget_cents / 100)))
         setMaxBusinesses(String(data.max_businesses_per_scan))
       })
-      .catch(() => toast.error('Failed to load settings'))
+      .catch(() => toasts.error('Failed to load settings'))
   }, [])
 
   const handleSave = async () => {
@@ -55,11 +56,11 @@ export default function SettingsPage() {
       const budgetCents = Math.round(parseFloat(budget) * 100)
       const max = parseInt(maxBusinesses, 10)
       if (isNaN(budgetCents) || budgetCents < 0) {
-        toast.error('Invalid budget amount')
+        toasts.error('Invalid budget amount')
         return
       }
       if (isNaN(max) || max < 1) {
-        toast.error('Max businesses must be at least 1')
+        toasts.error('Max businesses must be at least 1')
         return
       }
       const { data } = await settingsApi.patch({
@@ -67,9 +68,9 @@ export default function SettingsPage() {
         max_businesses_per_scan: max,
       })
       setConfig(data)
-      toast.success('Settings saved')
+      toasts.success('Settings saved')
     } catch {
-      toast.error('Failed to save settings')
+      toasts.error('Failed to save settings')
     } finally {
       setSaving(false)
     }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import toast from 'react-hot-toast'
+import { useToasts } from '@/components/ui/toast'
 import { useMapStore } from '../../store/mapStore'
 import { useLeadStore } from '../../store/leadStore'
 import { getScoreColor, getScoreLabel } from '../../utils/constants'
@@ -23,6 +23,7 @@ function ScoreBar({ label, score }) {
 export default function BusinessHoverCard() {
   const { hoveredBusiness: b, hoverPosition } = useMapStore()
   const { promoteBusiness } = useLeadStore()
+  const toasts = useToasts()
   const [promoting, setPromoting] = useState(false)
   const [promoted, setPromoted] = useState(false)
 
@@ -62,13 +63,13 @@ export default function BusinessHoverCard() {
     try {
       const result = await promoteBusiness(b.id)
       setPromoted(true)
-      toast.success(
+      toasts.success(
         result.already_lead
           ? `${b.name} is already a lead`
           : `${b.name} added — deep analysis running…`
       )
     } catch {
-      toast.error('Failed to promote lead')
+      toasts.error('Failed to promote lead')
     } finally {
       setPromoting(false)
     }

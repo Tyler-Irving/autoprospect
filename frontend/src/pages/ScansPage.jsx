@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import toast from 'react-hot-toast'
+import { useToasts } from '@/components/ui/toast'
 import { useScanStore } from '../store/scanStore'
 
 function relativeDate(iso) {
@@ -56,6 +56,7 @@ function StatusDot({ status }) {
 
 export default function ScansPage() {
   const { scans, loadScans, deleteScan, rerunScan, loadScanOnMap } = useScanStore()
+  const toasts = useToasts()
   const navigate = useNavigate()
   const [deleting, setDeleting] = useState({})
   const [rerunning, setRerunning] = useState({})
@@ -84,7 +85,7 @@ export default function ScansPage() {
       await rerunScan(scan.id)
       navigate('/')
     } catch {
-      toast.error('Failed to re-run scan')
+      toasts.error('Failed to re-run scan')
       setRerunning((prev) => ({ ...prev, [scan.id]: false }))
     }
   }
@@ -100,9 +101,9 @@ export default function ScansPage() {
     setDeleting((prev) => ({ ...prev, [scan.id]: true }))
     try {
       await deleteScan(scan.id)
-      toast.success('Scan deleted')
+      toasts.success('Scan deleted')
     } catch {
-      toast.error('Failed to delete scan')
+      toasts.error('Failed to delete scan')
       setDeleting((prev) => ({ ...prev, [scan.id]: false }))
     }
   }
