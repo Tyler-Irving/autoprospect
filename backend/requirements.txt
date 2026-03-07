@@ -12,6 +12,7 @@ anthropic==0.40.0
 googlemaps==4.10.0
 Pillow==11.1.0
 gunicorn==23.0.0
+django-anymail[resend]==14.0
 
 # Testing
 pytest==8.3.4

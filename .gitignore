@@ -55,6 +55,6 @@ dist/
 *.override.yml
 
 # Claude
-.claude
-CLAUDE.local.*
-CLAUDE.local.md
+.claude*
+CLAUDE.*
+.swarm/
