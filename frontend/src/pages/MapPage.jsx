@@ -60,13 +60,17 @@ export default function MapPage() {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Left panel */}
-      <div className={`${hasResults ? 'w-80' : 'w-72'} flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col p-4 overflow-hidden transition-[width] duration-300`}>
+      <div
+        className={`${hasResults ? 'w-80' : 'w-72'} flex-shrink-0 flex flex-col p-4 overflow-hidden transition-[width] duration-300`}
+        style={{ background: 'var(--card)', borderRight: '1px solid var(--border)' }}
+      >
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <h1 className="text-sm font-semibold text-slate-200">AutoProspect</h1>
+          <h1 className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>AutoProspect</h1>
           {hasResults && (
             <button
               onClick={() => setShowSearch((v) => !v)}
-              className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+              className="text-[10px] transition-colors hover:text-[#fafafa]"
+              style={{ color: 'var(--muted-foreground)' }}
             >
               {showSearch ? 'Hide search' : 'New search'}
             </button>

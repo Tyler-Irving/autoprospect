@@ -138,7 +138,7 @@ export default function SearchControls() {
   return (
     <form onSubmit={handleScan} className="flex flex-col gap-3">
       <div ref={wrapperRef} className="relative">
-        <label className="block text-xs font-medium text-slate-400 mb-1">Location</label>
+        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>Location</label>
         <input
           type="text"
           value={location}
@@ -146,15 +146,17 @@ export default function SearchControls() {
           onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
           placeholder="Hernando, MS or click the map"
           autoComplete="off"
-          className="w-full px-3 py-2 rounded bg-slate-700 text-slate-100 text-sm placeholder-slate-500 border border-slate-600 focus:border-blue-500 focus:outline-none"
+          className="w-full px-3 py-2 rounded text-sm placeholder-slate-500 focus:outline-none"
+          style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
         />
         {showSuggestions && suggestions.length > 0 && (
-          <ul className="absolute z-50 left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded shadow-lg overflow-hidden">
+          <ul className="absolute z-50 left-0 right-0 mt-1 rounded shadow-lg overflow-hidden" style={{ background: '#141414', border: '1px solid var(--border)' }}>
             {suggestions.map((prediction) => (
               <li
                 key={prediction.place_id}
                 onMouseDown={() => handleSelectSuggestion(prediction)}
-                className="px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 cursor-pointer truncate"
+                className="px-3 py-2 text-sm cursor-pointer truncate hover:bg-[#1a1a1a]"
+                style={{ color: 'var(--foreground)' }}
               >
                 {prediction.description}
               </li>
@@ -164,11 +166,12 @@ export default function SearchControls() {
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-400 mb-1">Radius</label>
+        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>Radius</label>
         <select
           value={radius}
           onChange={(e) => setRadius(Number(e.target.value))}
-          className="w-full px-3 py-2 rounded bg-slate-700 text-slate-100 text-sm border border-slate-600 focus:border-blue-500 focus:outline-none"
+          className="w-full px-3 py-2 rounded text-sm focus:outline-none"
+          style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
         >
           {RADIUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -177,7 +180,7 @@ export default function SearchControls() {
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-400 mb-2">Business Types</label>
+        <label className="block text-xs font-medium mb-2" style={{ color: 'var(--muted-foreground)' }}>Business Types</label>
         <div className="flex flex-wrap gap-1">
           {PLACE_TYPES.map((type) => (
             <button
@@ -187,8 +190,9 @@ export default function SearchControls() {
               className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                 selectedTypes.includes(type.value)
                   ? 'bg-blue-600 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  : 'hover:bg-[#333]'
               }`}
+              style={selectedTypes.includes(type.value) ? undefined : { background: 'var(--secondary)', color: 'var(--muted-foreground)' }}
             >
               {type.label}
             </button>
@@ -197,31 +201,33 @@ export default function SearchControls() {
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-400 mb-1">Keyword (optional)</label>
+        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>Keyword (optional)</label>
         <input
           type="text"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="24 hour, emergency..."
-          className="w-full px-3 py-2 rounded bg-slate-700 text-slate-100 text-sm placeholder-slate-500 border border-slate-600 focus:border-blue-500 focus:outline-none"
+          className="w-full px-3 py-2 rounded text-sm placeholder-slate-500 focus:outline-none"
+          style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
         />
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-400 mb-1">Scan Label (optional)</label>
+        <label className="block text-xs font-medium mb-1" style={{ color: 'var(--muted-foreground)' }}>Scan Label (optional)</label>
         <input
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="LA Plumbers Q1"
-          className="w-full px-3 py-2 rounded bg-slate-700 text-slate-100 text-sm placeholder-slate-500 border border-slate-600 focus:border-blue-500 focus:outline-none"
+          className="w-full px-3 py-2 rounded text-sm placeholder-slate-500 focus:outline-none"
+          style={{ background: 'var(--secondary)', color: 'var(--foreground)', border: '1px solid var(--border)' }}
         />
       </div>
 
       <button
         type="submit"
         disabled={isLaunching || isRunning || !location || selectedTypes.length === 0}
-        className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-semibold text-sm transition-colors"
+        className="w-full py-2 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold text-sm transition-colors"
       >
         {isLaunching || isRunning ? 'Scanning...' : 'Start Scan'}
       </button>

@@ -144,7 +144,7 @@ export default function MapView() {
       map.on('click', handleMapClick)
 
       return () => {
-        map.getCanvas().style.cursor = ''
+        map.getCanvas?.()?.style && (map.getCanvas().style.cursor = '')
         map.off('click', handleMapClick)
         if (clickPinRef.current) {
           clickPinRef.current.remove()
@@ -152,7 +152,7 @@ export default function MapView() {
         }
       }
     } else {
-      map.getCanvas().style.cursor = ''
+      map.getCanvas?.()?.style && (map.getCanvas().style.cursor = '')
     }
   }, [clickModeActive, setMapClickCenter, setSearchCenter])
 
