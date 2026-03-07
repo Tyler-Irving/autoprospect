@@ -63,6 +63,10 @@ class TestPlacesAutocomplete:
             {"place_id": "abc123", "description": "Chicago, IL, USA"},
         ]
 
+    def test_rejects_too_long_input(self):
+        resp = APIClient().get("/api/places/autocomplete/", {"input": "x" * 201})
+        assert resp.status_code == 400
+
 
 @pytest.mark.django_db
 class TestPlacesGeocode:
@@ -70,9 +74,13 @@ class TestPlacesGeocode:
         resp = APIClient().get("/api/places/geocode/")
         assert resp.status_code == 400
 
+    def test_invalid_place_id_format_returns_400(self):
+        resp = APIClient().get("/api/places/geocode/", {"place_id": "bad place id!"})
+        assert resp.status_code == 400
+
     @override_settings(GOOGLE_PLACES_API_KEY="")
     def test_missing_api_key_returns_503(self):
-        resp = APIClient().get("/api/places/geocode/", {"place_id": "x"})
+        resp = APIClient().get("/api/places/geocode/", {"place_id": "abc123"})
         assert resp.status_code == 503
 
     def test_http_error_returns_502(self):

@@ -15,6 +15,7 @@ from .serializers import ScanSerializer
 from .tasks import run_scan
 
 logger = logging.getLogger(__name__)
+ALLOWED_BUSINESS_SORTS = {"created_at", "-created_at", "name", "-name", "rating", "-rating"}
 
 
 def _mask(key: str) -> str:
@@ -80,18 +81,24 @@ def dashboard_stats(request):
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    total_leads = Lead.objects.count()
+    user = request.user
+    user_leads = Lead.objects.filter(owner=user)
+    user_scans = Scan.objects.filter(owner=user)
+
+    total_leads = user_leads.count()
     leads_by_status = dict(
-        Lead.objects.values_list("outreach_status").annotate(n=Count("id")).values_list("outreach_status", "n")
+        user_leads.values_list("outreach_status").annotate(n=Count("id")).values_list("outreach_status", "n")
     )
 
-    avg_score = AutomationScore.objects.filter(tier="tier1").aggregate(avg=Avg("overall_score"))["avg"]
+    avg_score = AutomationScore.objects.filter(
+        tier="tier1", business__scan__owner=user
+    ).aggregate(avg=Avg("overall_score"))["avg"]
 
     monthly_cost = (
-        Scan.objects.filter(created_at__gte=month_start).aggregate(total=Sum("api_cost_cents"))["total"] or 0
+        user_scans.filter(created_at__gte=month_start).aggregate(total=Sum("api_cost_cents"))["total"] or 0
     )
-    scans_this_month = Scan.objects.filter(created_at__gte=month_start).count()
-    total_businesses_scanned = Scan.objects.aggregate(total=Sum("businesses_found"))["total"] or 0
+    scans_this_month = user_scans.filter(created_at__gte=month_start).count()
+    total_businesses_scanned = user_scans.aggregate(total=Sum("businesses_found"))["total"] or 0
 
     return Response({
         "total_businesses_scanned": total_businesses_scanned,
@@ -111,7 +118,7 @@ class ScanViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         from django.db.models import Count
-        return Scan.objects.annotate(
+        return Scan.objects.filter(owner=self.request.user).annotate(
             lead_count=Count("businesses__lead", distinct=True)
         ).order_by("-created_at")
 
@@ -119,7 +126,7 @@ class ScanViewSet(viewsets.ModelViewSet):
         """Launch a new scan and enqueue the discovery task."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        scan = serializer.save()
+        scan = serializer.save(owner=request.user)
 
         # Enqueue the scan task
         task = run_scan.delay(scan.pk)
@@ -170,6 +177,8 @@ class ScanViewSet(viewsets.ModelViewSet):
             businesses = sorted(qs, key=lambda b: b.overall_score or -1, reverse=reverse)
             serializer = BusinessListSerializer(businesses, many=True)
         else:
+            if sort not in ALLOWED_BUSINESS_SORTS:
+                sort = "-created_at"
             qs = qs.order_by(sort)
             serializer = BusinessListSerializer(qs, many=True)
         return Response(serializer.data)

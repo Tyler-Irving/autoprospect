@@ -7,6 +7,9 @@ from rest_framework.response import Response
 from .models import Lead, LeadActivity, LeadList
 from .serializers import LeadActivitySerializer, LeadDetailSerializer, LeadListSerializer, LeadSerializer
 
+MAX_BULK_IDS = 500
+MAX_TAG_LENGTH = 64
+
 
 class LeadViewSet(viewsets.ModelViewSet):
     """CRUD + outreach generation for leads."""
@@ -22,7 +25,7 @@ class LeadViewSet(viewsets.ModelViewSet):
         return LeadSerializer
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = super().get_queryset().filter(owner=self.request.user)
         params = self.request.query_params
 
         outreach_status = params.get("status")
@@ -119,6 +122,10 @@ class LeadViewSet(viewsets.ModelViewSet):
 
         if not lead_ids or not action_name:
             return Response({"detail": "lead_ids and action required."}, status=400)
+        if not isinstance(lead_ids, list) or any(not isinstance(i, int) for i in lead_ids):
+            return Response({"detail": "lead_ids must be an array of integers."}, status=400)
+        if len(lead_ids) > MAX_BULK_IDS:
+            return Response({"detail": f"lead_ids exceeds max of {MAX_BULK_IDS}."}, status=400)
 
         leads = Lead.objects.filter(id__in=lead_ids)
 
@@ -133,6 +140,11 @@ class LeadViewSet(viewsets.ModelViewSet):
                 return Response({"detail": f"Invalid priority '{value}'."}, status=400)
             updated = leads.update(priority=value)
         elif action_name == "add_tag":
+            if not isinstance(value, str) or not value.strip():
+                return Response({"detail": "Tag value must be a non-empty string."}, status=400)
+            if len(value) > MAX_TAG_LENGTH:
+                return Response({"detail": f"Tag value exceeds max length {MAX_TAG_LENGTH}."}, status=400)
+            value = value.strip()
             updated = 0
             for lead in leads:
                 if value not in lead.tags:

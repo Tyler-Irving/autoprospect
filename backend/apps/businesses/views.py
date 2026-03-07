@@ -1,5 +1,6 @@
 """Businesses API views."""
 import logging
+import re
 
 import httpx
 from django.conf import settings
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete"
 GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
+MAX_AUTOCOMPLETE_INPUT = 200
+_PLACE_ID_RE = re.compile(r"^[A-Za-z0-9_\-:.+/=]{3,255}$")
 
 
 @api_view(["GET"])
@@ -26,6 +29,8 @@ def places_autocomplete(request):
     query = request.query_params.get("input", "").strip()
     if not query:
         return Response({"predictions": []})
+    if len(query) > MAX_AUTOCOMPLETE_INPUT:
+        return Response({"error": "input is too long."}, status=400)
 
     api_key = settings.GOOGLE_PLACES_API_KEY
     if not api_key:
@@ -72,6 +77,8 @@ def places_geocode(request):
     place_id = request.query_params.get("place_id", "").strip()
     if not place_id:
         return Response({"error": "place_id is required."}, status=400)
+    if not _PLACE_ID_RE.fullmatch(place_id):
+        return Response({"error": "place_id format is invalid."}, status=400)
 
     api_key = settings.GOOGLE_PLACES_API_KEY
     if not api_key:
@@ -100,7 +107,7 @@ def places_geocode(request):
 class BusinessViewSet(viewsets.ReadOnlyModelViewSet):
     """Read-only CRUD for businesses + map data endpoint."""
 
-    queryset = Business.objects.select_related("enrichment", "lead").prefetch_related("scores")
+    queryset = Business.objects.select_related("enrichment", "lead", "scan").prefetch_related("scores")
     serializer_class = BusinessListSerializer
 
     def get_serializer_class(self):
@@ -109,7 +116,7 @@ class BusinessViewSet(viewsets.ReadOnlyModelViewSet):
         return BusinessListSerializer
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = super().get_queryset().filter(scan__owner=self.request.user)
         params = self.request.query_params
 
         scan_id = params.get("scan")
@@ -150,7 +157,7 @@ class BusinessViewSet(viewsets.ReadOnlyModelViewSet):
         if hasattr(business, "lead"):
             return Response({"lead_id": business.lead.id, "already_lead": True})
 
-        lead = Lead.objects.create(business=business)
+        lead = Lead.objects.create(business=business, owner=request.user)
 
         # Auto-populate contact email from enrichment crawl if available
         enrichment = getattr(business, "enrichment", None)

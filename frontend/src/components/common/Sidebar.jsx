@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'framer-motion'
+import { useAuthStore } from '../../store/authStore'
 
 // Avoid animating motion.aside inline — named ref prevents false lint warnings
 const MotionAside = motion.aside
@@ -128,6 +129,13 @@ function NavItem({ to, label, icon, open, end, reduced }) {
 export default function Sidebar() {
   const [open, setOpen] = useState(false)
   const reduced = useReducedMotion()
+  const { user, logout } = useAuthStore()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <MotionAside
@@ -167,6 +175,37 @@ export default function Sidebar() {
       <div className="flex-1" />
 
       <NavItem to="/settings" label="Settings" icon={SETTINGS_ICON} open={open} reduced={reduced} />
+
+      {/* User avatar + logout */}
+      <button
+        onClick={handleLogout}
+        title="Sign out"
+        className="flex items-center gap-3 rounded-lg transition-colors hover:opacity-80"
+        style={{ padding: '6px 10px', marginTop: 4 }}
+      >
+        {user?.avatar ? (
+          <img
+            src={user.avatar}
+            alt={user.github_login}
+            className="shrink-0 rounded-full"
+            style={{ width: 32, height: 32 }}
+          />
+        ) : (
+          <div
+            className="shrink-0 rounded-full flex items-center justify-center text-xs font-bold"
+            style={{ width: 32, height: 32, background: 'var(--muted)', color: 'var(--foreground)' }}
+          >
+            {user?.github_login?.[0]?.toUpperCase() ?? '?'}
+          </div>
+        )}
+        <span
+          aria-hidden={!open}
+          className="text-xs whitespace-nowrap select-none"
+          style={{ color: 'var(--muted-foreground)', ...labelStyle(open, reduced) }}
+        >
+          Sign out
+        </span>
+      </button>
     </MotionAside>
   )
 }

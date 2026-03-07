@@ -1,5 +1,6 @@
 """Scan model — represents a single area prospecting job."""
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.db import models
 
 
@@ -27,6 +28,9 @@ class Scan(models.Model):
     error_message = models.TextField(blank=True)
     label = models.CharField(max_length=255, blank=True)
     api_cost_cents = models.PositiveIntegerField(default=0)
+    owner = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="scans"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)

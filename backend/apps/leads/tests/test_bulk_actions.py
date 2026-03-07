@@ -84,6 +84,25 @@ class TestBulkUpdateStatus:
         }, format="json")
         assert resp.status_code == 400
 
+    def test_bulk_action_rejects_non_integer_lead_ids(self):
+        client = APIClient()
+        resp = client.post("/api/leads/bulk-action/", {
+            "lead_ids": ["oops"],
+            "action": "update_status",
+            "value": "contacted",
+        }, format="json")
+        assert resp.status_code == 400
+
+    def test_bulk_action_rejects_too_many_lead_ids(self):
+        client = APIClient()
+        ids = list(range(1, 503))
+        resp = client.post("/api/leads/bulk-action/", {
+            "lead_ids": ids,
+            "action": "update_status",
+            "value": "contacted",
+        }, format="json")
+        assert resp.status_code == 400
+
 
 # ---------------------------------------------------------------------------
 # Bulk action — update_priority
@@ -146,6 +165,16 @@ class TestBulkAddTag:
 
         lead.refresh_from_db()
         assert lead.tags.count("hot-prospect") == 1
+
+    def test_add_tag_rejects_empty_value(self):
+        lead = _make_lead("T4")
+        client = APIClient()
+        resp = client.post("/api/leads/bulk-action/", {
+            "lead_ids": [lead.pk],
+            "action": "add_tag",
+            "value": "",
+        }, format="json")
+        assert resp.status_code == 400
 
 
 # ---------------------------------------------------------------------------

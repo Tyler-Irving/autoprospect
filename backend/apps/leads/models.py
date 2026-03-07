@@ -1,4 +1,5 @@
 """Lead management models."""
+from django.contrib.auth.models import User
 from django.db import models
 
 
@@ -8,6 +9,9 @@ class LeadList(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     color = models.CharField(max_length=7, default="#3B82F6")
+    owner = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="lead_lists"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
@@ -38,6 +42,9 @@ class Lead(models.Model):
 
     business = models.OneToOneField(
         "businesses.Business", on_delete=models.CASCADE, related_name="lead"
+    )
+    owner = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name="leads"
     )
     outreach_status = models.CharField(
         max_length=20, choices=OutreachStatus.choices, default=OutreachStatus.NEW
