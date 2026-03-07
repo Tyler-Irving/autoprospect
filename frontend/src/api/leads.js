@@ -7,6 +7,7 @@ export const leadsApi = {
   update: (id, data) => client.patch(`/leads/${id}/`, data),
   delete: (id) => client.delete(`/leads/${id}/`),
   generateOutreach: (id) => client.post(`/leads/${id}/generate-outreach/`),
+  sendEmail: (id) => client.post(`/leads/${id}/send-email/`),
   activities: (id) => client.get(`/leads/${id}/activities/`),
   bulkAction: (data) => client.post('/leads/bulk-action/', data),
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useLeadStore } from '../store/leadStore'
@@ -43,19 +43,30 @@ function Section({ title, children }) {
 export default function LeadDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { selectedLead: lead, fetchLead, updateLead, deleteLead, generateOutreach, clearSelected } = useLeadStore()
+  const { selectedLead: lead, fetchLead, updateLead, deleteLead, generateOutreach, sendEmail, clearSelected } = useLeadStore()
   const [notes, setNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [sending, setSending] = useState(false)
   const [outreachTab, setOutreachTab] = useState('email')
+  const [contactEmail, setContactEmail] = useState('')
+  const mountedRef = useRef(true)
 
   useEffect(() => {
-    fetchLead(id)
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
+  useEffect(() => {
+    fetchLead(id).catch(() => toast.error('Failed to load lead'))
     return () => clearSelected()
   }, [id])
 
   useEffect(() => {
-    if (lead) setNotes(lead.notes ?? '')
+    if (lead) {
+      setNotes(lead.notes ?? '')
+      setContactEmail(lead.contact_email ?? '')
+    }
   }, [lead?.id])
 
   if (!lead) {
@@ -90,7 +101,7 @@ export default function LeadDetailPage() {
     setGenerating(true)
     const businessName = b?.name
     const promise = generateOutreach(lead.id)
-    promise.finally(() => setGenerating(false))
+    promise.finally(() => { if (mountedRef.current) setGenerating(false) })
     toast.promise(promise, {
       loading: `Generating outreach for ${businessName}…`,
       success: `Outreach ready for ${businessName}`,
@@ -99,14 +110,38 @@ export default function LeadDetailPage() {
   }
 
   const handleCopy = (text, label) => {
-    navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied`))
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success(`${label} copied`))
+      .catch(() => toast.error('Copy failed — check browser permissions'))
+  }
+
+  const handleContactEmailBlur = async () => {
+    if (contactEmail === (lead.contact_email ?? '')) return
+    await updateLead(lead.id, { contact_email: contactEmail })
+  }
+
+  const handleSendEmail = () => {
+    if (sending) return
+    setSending(true)
+    const businessName = b?.name
+    const promise = sendEmail(lead.id)
+    promise.finally(() => { if (mountedRef.current) setSending(false) })
+    toast.promise(promise, {
+      loading: `Sending email to ${businessName}…`,
+      success: `Email sent to ${businessName}`,
+      error: (err) => err?.response?.data?.detail || `Failed to send email to ${businessName}`,
+    })
   }
 
   const handleDelete = async () => {
     if (!window.confirm(`Remove ${b?.name} from leads?`)) return
-    await deleteLead(lead.id)
-    toast.success('Lead removed')
-    navigate('/leads')
+    try {
+      await deleteLead(lead.id)
+      toast.success('Lead removed')
+      navigate('/leads')
+    } catch {
+      toast.error('Failed to remove lead')
+    }
   }
 
   const techFlags = e ? [
@@ -342,6 +377,30 @@ export default function LeadDetailPage() {
                       </button>
                     </div>
                   )}
+
+                  {/* Send section */}
+                  <div className="pt-1 space-y-2">
+                    <div>
+                      <label className="text-[10px] text-slate-500 uppercase tracking-wide font-semibold block mb-1">
+                        Recipient Email
+                      </label>
+                      <input
+                        type="email"
+                        value={contactEmail}
+                        onChange={(e) => setContactEmail(e.target.value)}
+                        onBlur={handleContactEmailBlur}
+                        placeholder="owner@business.com"
+                        className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-2 placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSendEmail}
+                      disabled={sending || !contactEmail.trim()}
+                      className="w-full py-2 rounded-lg text-sm font-semibold transition-colors bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {sending ? 'Sending…' : lead.contact_attempts > 0 ? `Send Again (sent ${lead.contact_attempts}×)` : 'Send Email'}
+                    </button>
+                  </div>
                 </div>
               )}
 

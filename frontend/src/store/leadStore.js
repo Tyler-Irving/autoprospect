@@ -26,9 +26,14 @@ export const useLeadStore = create((set, get) => ({
   },
 
   fetchLead: async (id) => {
-    const { data } = await leadsApi.get(id)
-    set({ selectedLead: data })
-    return data
+    try {
+      const { data } = await leadsApi.get(id)
+      set({ selectedLead: data })
+      return data
+    } catch (err) {
+      set({ selectedLead: null })
+      throw err
+    }
   },
 
   promoteBusiness: async (businessId) => {
@@ -62,6 +67,14 @@ export const useLeadStore = create((set, get) => ({
       leads: state.leads.filter((l) => l.id !== id),
       selectedLead: state.selectedLead?.id === id ? null : state.selectedLead,
     }))
+  },
+
+  sendEmail: async (leadId) => {
+    const { data } = await leadsApi.sendEmail(leadId)
+    set((state) => ({
+      selectedLead: state.selectedLead?.id === leadId ? data : state.selectedLead,
+    }))
+    return data
   },
 
   generateOutreach: async (leadId) => {
