@@ -64,8 +64,14 @@ export default function ScansPage() {
     loadScans()
   }, [])
 
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
   const totalBusinesses = scans.reduce((sum, s) => sum + (s.businesses_found ?? 0), 0)
   const totalCostCents = scans.reduce((sum, s) => sum + (s.api_cost_cents ?? 0), 0)
+  const monthCostCents = scans
+    .filter((s) => new Date(s.created_at) >= monthStart)
+    .reduce((sum, s) => sum + (s.api_cost_cents ?? 0), 0)
 
   const handleViewOnMap = (scan) => {
     loadScanOnMap(scan)
@@ -117,10 +123,11 @@ export default function ScansPage() {
         </div>
 
         {/* Stats bar */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           <StatCard label="Total Scans" value={scans.length} />
           <StatCard label="Businesses Found" value={totalBusinesses} />
-          <StatCard label="Total API Spend" value={`$${(totalCostCents / 100).toFixed(2)}`} />
+          <StatCard label="This Month" value={`$${(monthCostCents / 100).toFixed(2)}`} />
+          <StatCard label="All-Time Spend" value={`$${(totalCostCents / 100).toFixed(2)}`} />
         </div>
 
         {/* Scan list */}

@@ -17,7 +17,7 @@ export default function ScanProgress() {
 
   if (!activeScan) return null
 
-  const { status, progress_pct, businesses_found, businesses_enriched, businesses_scored, label, error_message } = activeScan
+  const { status, progress_pct, businesses_found, businesses_enriched, businesses_scored, label, error_message, api_cost_cents } = activeScan
   const isFailed = status === 'failed'
 
   const handleRetry = async () => {
@@ -69,6 +69,9 @@ export default function ScanProgress() {
           <span style={{ color: 'var(--foreground)' }}>{businesses_found} found</span>
           {businesses_enriched > 0 && <span>{businesses_enriched} enriched</span>}
           {businesses_scored > 0 && <span>{businesses_scored} scored</span>}
+          {api_cost_cents > 0 && (
+            <span className="ml-auto font-mono">${(api_cost_cents / 100).toFixed(2)}</span>
+          )}
         </div>
       )}
 
