@@ -100,7 +100,7 @@ def places_geocode(request):
 class BusinessViewSet(viewsets.ReadOnlyModelViewSet):
     """Read-only CRUD for businesses + map data endpoint."""
 
-    queryset = Business.objects.select_related("enrichment").prefetch_related("scores")
+    queryset = Business.objects.select_related("enrichment", "lead").prefetch_related("scores")
     serializer_class = BusinessListSerializer
 
     def get_serializer_class(self):
@@ -123,13 +123,10 @@ class BusinessViewSet(viewsets.ReadOnlyModelViewSet):
         min_score = params.get("min_score")
         if min_score:
             try:
-                scored_ids = (
-                    Business.objects.filter(
-                        scores__tier="tier1",
-                        scores__overall_score__gte=int(min_score),
-                    ).values_list("id", flat=True)
-                )
-                qs = qs.filter(id__in=scored_ids)
+                qs = qs.filter(
+                    scores__tier="tier1",
+                    scores__overall_score__gte=int(min_score),
+                ).distinct()
             except ValueError:
                 pass
 
@@ -138,10 +135,7 @@ class BusinessViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"], url_path="map-data")
     def map_data(self, request):
         """Return lightweight marker data for map rendering."""
-        scan_id = request.query_params.get("scan")
         qs = self.get_queryset()
-        if scan_id:
-            qs = qs.filter(scan_id=scan_id)
         serializer = MapMarkerSerializer(qs, many=True)
         return Response(serializer.data)
 
