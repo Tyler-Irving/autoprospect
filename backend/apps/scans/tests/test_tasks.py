@@ -67,10 +67,13 @@ class TestRunScan:
         assert scan.status == Scan.Status.ENRICHING_T1
         assert result["businesses_found"] == 1
 
-    def test_discovery_exception_marks_scan_failed(self):
+    def test_discovery_exception_marks_scan_failed_on_last_retry(self):
+        """Scan is only marked FAILED when all retries are exhausted."""
         scan = _make_scan()
+        # max_retries=0 means the first attempt is the last — scan should be FAILED.
         with patch("apps.scans.tasks._run_discovery", side_effect=RuntimeError("boom")), \
-             patch.object(run_scan, "retry", side_effect=RuntimeError("retry")):
+             patch.object(run_scan, "retry", side_effect=RuntimeError("retry")), \
+             patch.object(run_scan, "max_retries", 0):
             try:
                 run_scan(scan.pk)
             except RuntimeError:
@@ -79,6 +82,22 @@ class TestRunScan:
         scan.refresh_from_db()
         assert scan.status == Scan.Status.FAILED
         assert "boom" in scan.error_message
+
+    def test_discovery_exception_does_not_mark_failed_during_retry(self):
+        """Scan is NOT marked FAILED on intermediate retry attempts."""
+        scan = _make_scan()
+        original_status = scan.status
+        # max_retries=2 and default retries=0 — this is NOT the last attempt.
+        with patch("apps.scans.tasks._run_discovery", side_effect=RuntimeError("boom")), \
+             patch.object(run_scan, "retry", side_effect=RuntimeError("retry")), \
+             patch.object(run_scan, "max_retries", 2):
+            try:
+                run_scan(scan.pk)
+            except RuntimeError:
+                pass
+
+        scan.refresh_from_db()
+        assert scan.status != Scan.Status.FAILED
 
     def test_result_contains_scan_id(self):
         scan = _make_scan()

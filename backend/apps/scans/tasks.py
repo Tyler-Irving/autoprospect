@@ -74,10 +74,16 @@ def run_scan(self, scan_id: int) -> dict[str, Any]:
         return {"scan_id": scan_id, "businesses_found": len(business_ids)}
 
     except Exception as exc:
-        logger.exception("Scan %d failed: %s", scan_id, exc)
-        scan.status = Scan.Status.FAILED
-        scan.error_message = str(exc)
-        scan.save(update_fields=["status", "error_message", "updated_at"])
+        logger.exception(
+            "Scan %d failed (attempt %d/%d): %s",
+            scan_id, self.request.retries + 1, self.max_retries + 1, exc,
+        )
+        # Only mark FAILED on the final attempt so the scan status isn't
+        # incorrectly set to FAILED during a legitimate retry window.
+        if self.request.retries >= self.max_retries:
+            scan.status = Scan.Status.FAILED
+            scan.error_message = str(exc)
+            scan.save(update_fields=["status", "error_message", "updated_at"])
         raise self.retry(exc=exc)
 
 
@@ -239,9 +245,11 @@ def _upsert_business(scan: Scan, data: dict[str, Any]) -> tuple[Business, bool]:
         defaults={**data, "scan": scan},
     )
     if not created:
+        update_fields = ["scan", "updated_at"]
         for field, value in data.items():
             if field != "google_place_id":
                 setattr(business, field, value)
+                update_fields.append(field)
         business.scan = scan
-        business.save()
+        business.save(update_fields=update_fields)
     return business, created

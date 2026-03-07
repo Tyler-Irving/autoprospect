@@ -107,9 +107,10 @@ class ScanViewSet(viewsets.ModelViewSet):
 
         sort = request.query_params.get("sort", "-created_at")
         if sort in ("-overall_score", "overall_score"):
-            pass  # Handled post-query since score is on related model
+            reverse = sort.startswith("-")
+            businesses = sorted(qs, key=lambda b: b.overall_score or -1, reverse=reverse)
+            serializer = BusinessListSerializer(businesses, many=True)
         else:
             qs = qs.order_by(sort)
-
-        serializer = BusinessListSerializer(qs, many=True)
+            serializer = BusinessListSerializer(qs, many=True)
         return Response(serializer.data)
