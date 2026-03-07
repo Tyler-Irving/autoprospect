@@ -12,13 +12,14 @@ import { useLeadStore } from '../store/leadStore'
 
 export default function MapPage() {
   const { activeScan } = useScanStore()
-  const { markers, selectedBusiness, setSelectedBusiness } = useMapStore()
+  const { markers, selectedBusiness, setSelectedBusiness, setClickMode, clickModeActive } = useMapStore()
   const { promoteBusiness } = useLeadStore()
   const [showSearch, setShowSearch] = useState(true)
   const [promoting, setPromoting] = useState({})
   const [promoted, setPromoted] = useState({})
 
   const hasResults = activeScan?.status === 'completed' && markers.length > 0
+  const isRunning = activeScan && !['completed', 'failed'].includes(activeScan.status)
 
   // Auto-collapse search when results arrive; re-open on new scan start
   useEffect(() => {
@@ -35,6 +36,12 @@ export default function MapPage() {
     setPromoting({})
     setPromoted({})
   }, [activeScan?.id])
+
+  // Activate click-to-scan mode while the search panel is visible and no scan is running.
+  // Automatically deactivates when a scan starts (isRunning becomes true).
+  useEffect(() => {
+    setClickMode(showSearch && !isRunning)
+  }, [showSearch, isRunning])
 
   const handlePromote = async (business) => {
     if (promoting[business.id] || promoted[business.id] || business.has_lead) return
@@ -88,7 +95,7 @@ export default function MapPage() {
       {/* Map — clicking it closes the drawer */}
       <div
         className="flex-1 relative"
-        onClick={() => selectedBusiness && setSelectedBusiness(null)}
+        onClick={() => !clickModeActive && selectedBusiness && setSelectedBusiness(null)}
       >
         <MapView />
       </div>

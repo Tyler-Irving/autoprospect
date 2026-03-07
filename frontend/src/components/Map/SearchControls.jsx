@@ -14,7 +14,7 @@ const RADIUS_OPTIONS = [
 
 export default function SearchControls() {
   const { launchScan, isLaunching, activeScan } = useScanStore()
-  const { setSearchCenter, setSearchRadius, loadMarkersForScan, clearMarkers } = useMapStore()
+  const { setSearchCenter, setSearchRadius, loadMarkersForScan, clearMarkers, mapClickCenter } = useMapStore()
 
   const [location, setLocation] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -33,6 +33,31 @@ export default function SearchControls() {
       loadMarkersForScan(activeScan.id)
     }
   }, [activeScan?.status, activeScan?.id])
+
+  // React to map clicks — reverse geocode the clicked coordinates into a place name.
+  useEffect(() => {
+    if (!mapClickCenter) return
+    const [lng, lat] = mapClickCenter
+    setSelectedCoords(mapClickCenter)
+    setLocation('Locating\u2026')
+
+    const token = import.meta.env.VITE_MAPBOX_TOKEN
+    if (!token) {
+      setLocation(`${lat.toFixed(4)}\u00b0 N, ${Math.abs(lng).toFixed(4)}\u00b0 W`)
+      return
+    }
+    fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?types=place,locality,neighborhood,district&access_token=${token}`
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        const name = data.features?.[0]?.place_name
+        setLocation(name || `${lat.toFixed(4)}\u00b0 N, ${Math.abs(lng).toFixed(4)}\u00b0 W`)
+      })
+      .catch(() => {
+        setLocation(`${lat.toFixed(4)}\u00b0 N, ${Math.abs(lng).toFixed(4)}\u00b0 W`)
+      })
+  }, [mapClickCenter])
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -91,10 +116,7 @@ export default function SearchControls() {
     e.preventDefault()
     if (!location || selectedTypes.length === 0) return
 
-    if (!selectedCoords) {
-      alert('Please select a location from the dropdown.')
-      return
-    }
+    if (!selectedCoords) return
 
     const [lng, lat] = selectedCoords
     setSearchCenter([lng, lat])
@@ -102,8 +124,8 @@ export default function SearchControls() {
     clearMarkers()
 
     await launchScan({
-      center_lat: lat,
-      center_lng: lng,
+      center_lat: parseFloat(lat.toFixed(7)),
+      center_lng: parseFloat(lng.toFixed(7)),
       radius_meters: radius,
       place_types: selectedTypes,
       keyword,
@@ -122,7 +144,7 @@ export default function SearchControls() {
           value={location}
           onChange={handleLocationChange}
           onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-          placeholder="Hernando, MS"
+          placeholder="Hernando, MS or click the map"
           autoComplete="off"
           className="w-full px-3 py-2 rounded bg-slate-700 text-slate-100 text-sm placeholder-slate-500 border border-slate-600 focus:border-blue-500 focus:outline-none"
         />

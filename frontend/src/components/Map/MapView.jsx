@@ -10,6 +10,7 @@ export default function MapView() {
   const mapContainer = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef([])
+  const clickPinRef = useRef(null)
 
   const {
     mapCenter,
@@ -17,7 +18,10 @@ export default function MapView() {
     searchCenter,
     searchRadiusMeters,
     markers,
+    clickModeActive,
     setMapCenter,
+    setMapClickCenter,
+    setSearchCenter,
     setSelectedBusiness,
     setHoveredBusiness,
   } = useMapStore()
@@ -108,6 +112,50 @@ export default function MapView() {
     }
   }, [searchCenter, searchRadiusMeters])
 
+  // Click-to-scan: enter crosshair mode and place a pin when the user clicks the map
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (clickModeActive) {
+      map.getCanvas().style.cursor = 'crosshair'
+
+      const handleMapClick = (e) => {
+        const { lng, lat } = e.lngLat
+
+        setMapClickCenter([lng, lat])
+        setSearchCenter([lng, lat])
+
+        if (clickPinRef.current) {
+          clickPinRef.current.remove()
+          clickPinRef.current = null
+        }
+
+        const el = document.createElement('div')
+        el.className = 'click-pin-marker'
+        el.style.cssText =
+          'width:18px;height:18px;border-radius:50%;background:#3b82f6;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);cursor:crosshair;'
+
+        clickPinRef.current = new mapboxgl.Marker({ element: el })
+          .setLngLat([lng, lat])
+          .addTo(map)
+      }
+
+      map.on('click', handleMapClick)
+
+      return () => {
+        map.getCanvas().style.cursor = ''
+        map.off('click', handleMapClick)
+        if (clickPinRef.current) {
+          clickPinRef.current.remove()
+          clickPinRef.current = null
+        }
+      }
+    } else {
+      map.getCanvas().style.cursor = ''
+    }
+  }, [clickModeActive, setMapClickCenter, setSearchCenter])
+
   // Render business markers
   useEffect(() => {
     const map = mapRef.current
@@ -163,6 +211,13 @@ export default function MapView() {
   }, [markers, setSelectedBusiness, setHoveredBusiness])
 
   return (
-    <div ref={mapContainer} className="w-full h-full" style={{ minHeight: '400px' }} />
+    <div className="relative w-full h-full" style={{ minHeight: '400px' }}>
+      {clickModeActive && (
+        <div className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-slate-900/90 text-slate-200 text-xs font-medium px-3 py-1.5 rounded-full border border-slate-700 shadow-lg">
+          Click map to set scan center
+        </div>
+      )}
+      <div ref={mapContainer} className="w-full h-full" />
+    </div>
   )
 }

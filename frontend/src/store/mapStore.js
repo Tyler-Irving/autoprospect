@@ -13,12 +13,19 @@ export const useMapStore = create((set) => ({
   hoverPosition: null,
   isLoadingMarkers: false,
 
+  // Click-to-scan mode: active when search panel is open and no scan is running
+  clickModeActive: false,
+  // Coordinates set by clicking the map in click mode: [lng, lat] | null
+  mapClickCenter: null,
+
   setMapCenter: (center) => set({ mapCenter: center }),
   setMapZoom: (zoom) => set({ mapZoom: zoom }),
   setSearchCenter: (center) => set({ searchCenter: center }),
   setSearchRadius: (radius) => set({ searchRadiusMeters: radius }),
   setSelectedBusiness: (business) => set({ selectedBusiness: business }),
   setHoveredBusiness: (business, position) => set({ hoveredBusiness: business, hoverPosition: position }),
+  setClickMode: (active) => set({ clickModeActive: active }),
+  setMapClickCenter: (center) => set({ mapClickCenter: center }),
 
   loadMarkersForScan: async (scanId) => {
     set({ isLoadingMarkers: true })
