@@ -37,6 +37,26 @@ class Scan(models.Model):
     def __str__(self) -> str:
         return self.label or f"Scan #{self.pk} ({self.status})"
 
+    @property
+    def progress_pct(self) -> int:
+        """Compute overall progress percentage based on current status."""
+        status_progress = {
+            self.Status.PENDING: 0,
+            self.Status.DISCOVERING: 15,
+            self.Status.ENRICHING_T1: 40,
+            self.Status.SCORING_T1: 70,
+            self.Status.COMPLETED: 100,
+            self.Status.FAILED: 0,
+        }
+        base = status_progress.get(self.status, 0)
+        if self.status == self.Status.ENRICHING_T1 and self.businesses_found > 0:
+            pct = self.businesses_enriched / self.businesses_found
+            return int(base + pct * 30)
+        if self.status == self.Status.SCORING_T1 and self.businesses_found > 0:
+            pct = self.businesses_scored / self.businesses_found
+            return int(base + pct * 30)
+        return base
+
 
 class SiteConfig(models.Model):
     """Singleton model for user-editable application settings.
@@ -74,23 +94,3 @@ class SiteConfig(models.Model):
     def effective_max_businesses(self) -> int:
         """Return the active max businesses, falling back to the env value."""
         return self.max_businesses_per_scan or settings.MAX_BUSINESSES_PER_SCAN
-
-    @property
-    def progress_pct(self) -> int:
-        """Compute overall progress percentage based on current status."""
-        status_progress = {
-            self.Status.PENDING: 0,
-            self.Status.DISCOVERING: 15,
-            self.Status.ENRICHING_T1: 40,
-            self.Status.SCORING_T1: 70,
-            self.Status.COMPLETED: 100,
-            self.Status.FAILED: 0,
-        }
-        base = status_progress.get(self.status, 0)
-        if self.status == self.Status.ENRICHING_T1 and self.businesses_found > 0:
-            pct = self.businesses_enriched / self.businesses_found
-            return int(base + pct * 30)
-        if self.status == self.Status.SCORING_T1 and self.businesses_found > 0:
-            pct = self.businesses_scored / self.businesses_found
-            return int(base + pct * 30)
-        return base

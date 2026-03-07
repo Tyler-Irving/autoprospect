@@ -1,4 +1,5 @@
 """Leads API views."""
+from django.db import connection
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -30,7 +31,12 @@ class LeadViewSet(viewsets.ModelViewSet):
 
         tags = params.get("tags")
         if tags:
-            qs = qs.filter(tags__contains=[tags])
+            if connection.vendor == "sqlite":
+                # SQLite lacks JSON contains lookup support; fallback for test/dev parity.
+                ids = [lead.pk for lead in qs if tags in (lead.tags or [])]
+                qs = qs.filter(pk__in=ids)
+            else:
+                qs = qs.filter(tags__contains=[tags])
 
         list_id = params.get("list")
         if list_id:

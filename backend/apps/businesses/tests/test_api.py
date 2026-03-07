@@ -16,7 +16,8 @@ class TestBusinessAPI:
         b2 = business_factory(name="Biz Two")
         response = api_client.get('/api/businesses/')
         assert response.status_code == 200
-        payload = response.json()
+        raw = response.json()
+        payload = raw.get("results", raw) if isinstance(raw, dict) else raw
         ids = {item["id"] for item in payload}
         assert ids == {b1.pk, b2.pk}
 

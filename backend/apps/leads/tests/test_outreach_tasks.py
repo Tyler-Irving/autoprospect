@@ -39,7 +39,7 @@ class TestRunOutreachGeneration:
             "api_cost_cents": 6,
         }
 
-        with patch("apps.leads.tasks.ClaudeClient") as MockClient:
+        with patch("apps.scoring.services.claude_client.ClaudeClient") as MockClient:
             MockClient.return_value.complete.side_effect = [email_payload, call_payload]
             result = run_outreach_generation(lead.pk)
 
@@ -58,7 +58,7 @@ class TestRunOutreachGeneration:
 
     def test_invalid_claude_response_bubbles_up(self):
         lead, _ = _make_lead("S2")
-        with patch("apps.leads.tasks.ClaudeClient") as MockClient:
+        with patch("apps.scoring.services.claude_client.ClaudeClient") as MockClient:
             MockClient.return_value.complete.side_effect = ValueError("bad json")
             with pytest.raises(ValueError, match="bad json"):
                 run_outreach_generation(lead.pk)

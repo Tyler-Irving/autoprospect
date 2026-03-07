@@ -375,9 +375,12 @@ def _make_http_response(status_code: int, body: dict) -> MagicMock:
 
 @pytest.mark.django_db
 class TestSearchNearbyRetry:
-    """search_nearby retries once when Google returns 400 with unsupported types."""
+    """search_nearby handles unsupported types without failing valid type buckets."""
 
     def _service(self):
+        from django.core.cache import cache
+
+        cache.clear()
         with patch("apps.businesses.services.google_places.settings") as mock_settings:
             mock_settings.GOOGLE_PLACES_API_KEY = "test-key"
             svc = GooglePlacesService.__new__(GooglePlacesService)
@@ -388,8 +391,8 @@ class TestSearchNearbyRetry:
             }
         return svc
 
-    def test_retries_once_on_400_with_unsupported_type(self):
-        """First 400 with unsupported type triggers one retry; retry succeeds."""
+    def test_unsupported_type_bucket_skipped_and_valid_bucket_succeeds(self):
+        """Unsupported type bucket is skipped; other type bucket still succeeds."""
         svc = self._service()
 
         bad_response = _make_http_response(
@@ -414,15 +417,15 @@ class TestSearchNearbyRetry:
                 lat=34.05,
                 lng=-118.24,
                 radius_meters=5000,
-                place_types=["plumber", "bad_type"],
+                place_types=["bad_type", "plumber"],
             )
 
         assert mock_post.call_count == 2
         assert len(places) == 1
         assert places[0]["id"] == "place_1"
 
-    def test_bad_type_removed_on_retry(self):
-        """The unsupported type must be absent from the payload on the second attempt."""
+    def test_each_bucket_calls_api_with_single_included_type(self):
+        """Each place type is called independently with a single included type."""
         svc = self._service()
 
         bad_response = _make_http_response(
@@ -443,22 +446,21 @@ class TestSearchNearbyRetry:
             mock_client.post = mock_post
             mock_client_cls.return_value = mock_client
 
-            svc.search_nearby(
+            places = svc.search_nearby(
                 lat=34.05,
                 lng=-118.24,
                 radius_meters=5000,
-                place_types=["plumber", "bad_type"],
+                place_types=["bad_type", "plumber"],
             )
 
-        # Inspect payload of the second call — bad_type must be gone.
-        second_call_kwargs = mock_post.call_args_list[1].kwargs
-        second_payload = second_call_kwargs.get("json", {})
-        included = second_payload.get("includedTypes", [])
-        assert "bad_type" not in included
-        assert "plumber" in included
+        assert places == []
+        first_included = mock_post.call_args_list[0].kwargs["json"]["includedTypes"]
+        second_included = mock_post.call_args_list[1].kwargs["json"]["includedTypes"]
+        assert first_included == ["bad_type"]
+        assert second_included == ["plumber"]
 
-    def test_second_400_raises_http_status_error(self):
-        """If the retry also returns 400 we must raise and not loop further."""
+    def test_second_400_with_unsupported_valid_type_is_skipped(self):
+        """If Google says the valid bucket is unsupported too, it is skipped."""
         svc = self._service()
 
         bad_response_1 = _make_http_response(
@@ -479,15 +481,15 @@ class TestSearchNearbyRetry:
             mock_client.post = mock_post
             mock_client_cls.return_value = mock_client
 
-            with pytest.raises(httpx.HTTPStatusError):
-                svc.search_nearby(
-                    lat=34.05,
-                    lng=-118.24,
-                    radius_meters=5000,
-                    place_types=["plumber", "bad_type"],
-                )
+            places = svc.search_nearby(
+                lat=34.05,
+                lng=-118.24,
+                radius_meters=5000,
+                place_types=["bad_type", "plumber"],
+            )
 
         assert mock_post.call_count == 2
+        assert places == []
 
     def test_no_retry_on_400_without_unsupported_type(self):
         """A 400 error whose message does not match must not trigger retry."""

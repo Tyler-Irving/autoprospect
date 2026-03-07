@@ -26,7 +26,8 @@ class TestPromoteEndpoint:
         _, business = _create_scan_and_business()
         client = APIClient()
         url = f"/api/businesses/{business.pk}/promote/"
-        resp = client.post(url)
+        with patch("apps.scoring.tasks.score_business_tier2.delay"):
+            resp = client.post(url)
         assert resp.status_code == 201
         assert "lead_id" in resp.data
         assert resp.data["already_lead"] is False
@@ -35,8 +36,9 @@ class TestPromoteEndpoint:
         _, business = _create_scan_and_business()
         client = APIClient()
         url = f"/api/businesses/{business.pk}/promote/"
-        client.post(url)  # first time
-        resp = client.post(url)  # second time
+        with patch("apps.scoring.tasks.score_business_tier2.delay"):
+            client.post(url)  # first time
+            resp = client.post(url)  # second time
         assert resp.status_code == 200
         assert resp.data["already_lead"] is True
 
@@ -57,7 +59,8 @@ class TestPromoteEndpoint:
 
         EnrichmentProfile.objects.create(business=business, contact_email="owner@biz.com")
         client = APIClient()
-        resp = client.post(f"/api/businesses/{business.pk}/promote/")
+        with patch("apps.scoring.tasks.score_business_tier2.delay"):
+            resp = client.post(f"/api/businesses/{business.pk}/promote/")
         assert resp.status_code == 201
         lead = Lead.objects.get(pk=resp.data["lead_id"])
         assert lead.contact_email == "owner@biz.com"
