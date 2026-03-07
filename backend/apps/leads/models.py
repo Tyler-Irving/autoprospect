@@ -12,6 +12,13 @@ class LeadList(models.Model):
     owner = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.SET_NULL, related_name="lead_lists"
     )
+    workspace = models.ForeignKey(
+        "workspaces.Workspace",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="lead_lists",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
@@ -46,6 +53,13 @@ class Lead(models.Model):
     owner = models.ForeignKey(
         User, null=True, blank=True, on_delete=models.SET_NULL, related_name="leads"
     )
+    workspace = models.ForeignKey(
+        "workspaces.Workspace",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="leads",
+    )
     outreach_status = models.CharField(
         max_length=20, choices=OutreachStatus.choices, default=OutreachStatus.NEW
     )
@@ -63,6 +77,16 @@ class Lead(models.Model):
     last_contacted_at = models.DateTimeField(null=True, blank=True)
     next_followup_at = models.DateTimeField(null=True, blank=True)
     contact_attempts = models.SmallIntegerField(default=0)
+    # Approval queue fields — set when agent auto-generates outreach
+    approval_required = models.BooleanField(default=False)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approved_leads",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -82,6 +106,8 @@ class LeadActivity(models.Model):
         TAG_ADDED = "tag_added", "Tag Added"
         TIER2_REQUESTED = "tier2_requested", "Tier 2 Requested"
         EMAIL_SENT = "email_sent", "Email Sent"
+        OUTREACH_APPROVED = "outreach_approved", "Outreach Approved"
+        OUTREACH_REJECTED = "outreach_rejected", "Outreach Rejected"
 
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name="activities")
     activity_type = models.CharField(max_length=30, choices=ActivityType.choices)

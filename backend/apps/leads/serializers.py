@@ -53,10 +53,12 @@ class LeadSerializer(serializers.ModelSerializer):
             "last_contacted_at",
             "next_followup_at",
             "contact_attempts",
+            "approval_required",
+            "approved_at",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "approval_required", "approved_at", "created_at", "updated_at"]
 
     def create(self, validated_data):
         from apps.businesses.models import Business

@@ -10,6 +10,9 @@ export const leadsApi = {
   sendEmail: (id) => client.post(`/leads/${id}/send-email/`),
   activities: (id) => client.get(`/leads/${id}/activities/`),
   bulkAction: (data) => client.post('/leads/bulk-action/', data),
+  pendingApproval: () => client.get('/leads/pending-approval/'),
+  approve: (id, sendNow = false) => client.post(`/leads/${id}/approve/`, { send_now: sendNow }),
+  reject: (id) => client.post(`/leads/${id}/reject/`),
 
   // Lead Lists
   createList: (data) => client.post('/lead-lists/', data),

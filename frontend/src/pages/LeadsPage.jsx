@@ -4,6 +4,15 @@ import { useLeadStore } from '../store/leadStore'
 import { scansApi } from '../api/scans'
 import { getScoreColor, getScoreLabel } from '../utils/constants'
 import { useToasts } from '@/components/ui/toast'
+import {
+  Label,
+  Select,
+  SelectItem,
+  SelectListBox,
+  SelectPopover,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
@@ -51,22 +60,21 @@ function StatCard({ label, value, sub }) {
 }
 
 export default function LeadsPage() {
-  const { leads, filters, isLoading, setFilters, fetchLeads, updateLead } = useLeadStore()
+  const { leads, pendingApprovals, filters, isLoading, setFilters, fetchLeads, updateLead, fetchPendingApprovals, approveLead, rejectLead } = useLeadStore()
   const toasts = useToasts()
   const [stats, setStats] = useState(null)
+  const [activeTab, setActiveTab] = useState('pipeline')
+  const [approving, setApproving] = useState({})
   const isMounted = useRef(false)
 
   useEffect(() => {
     fetchLeads()
+    fetchPendingApprovals()
     scansApi.dashboardStats().then(({ data }) => setStats(data)).catch(() => {})
   }, [])
 
   useEffect(() => {
-    // Skip the first run — the mount effect above already fetches leads.
-    if (!isMounted.current) {
-      isMounted.current = true
-      return
-    }
+    if (!isMounted.current) { isMounted.current = true; return }
     fetchLeads()
   }, [filters.status, filters.minScore])
 
@@ -78,6 +86,27 @@ export default function LeadsPage() {
     }
   }
 
+  const handleApprove = async (id, sendNow = false) => {
+    setApproving((a) => ({ ...a, [id]: true }))
+    try {
+      await approveLead(id, sendNow)
+      toasts.success(sendNow ? 'Approved and email sent' : 'Outreach approved')
+    } catch {
+      toasts.error('Failed to approve')
+    } finally {
+      setApproving((a) => ({ ...a, [id]: false }))
+    }
+  }
+
+  const handleReject = async (id) => {
+    try {
+      await rejectLead(id)
+      toasts.success('Outreach rejected and cleared')
+    } catch {
+      toasts.error('Failed to reject')
+    }
+  }
+
   return (
     <div className="h-full overflow-auto p-6" style={{ background: 'var(--background)' }}>
       <div className="max-w-6xl mx-auto space-y-6">
@@ -86,6 +115,27 @@ export default function LeadsPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold" style={{ color: 'var(--foreground)' }}>Lead Pipeline</h1>
           <span className="text-sm" style={{ color: 'var(--muted-foreground)' }}>{leads.length} lead{leads.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        {/* View selector */}
+        <div className="w-full max-w-[260px]">
+          <Select
+            selectedKey={activeTab}
+            onSelectionChange={(key) => setActiveTab(String(key))}
+          >
+            <Label className="text-xs">View</Label>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopover>
+              <SelectListBox>
+                <SelectItem id="pipeline">Pipeline</SelectItem>
+                <SelectItem id="approval">
+                  Approval Queue ({pendingApprovals.length})
+                </SelectItem>
+              </SelectListBox>
+            </SelectPopover>
+          </Select>
         </div>
 
         {/* Stats row */}
@@ -109,6 +159,95 @@ export default function LeadsPage() {
             />
           </div>
         )}
+
+        {/* ── Approval Queue tab ─────────────────────────────────────────── */}
+        {activeTab === 'approval' && (
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+            {pendingApprovals.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>No outreach pending approval.</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>
+                  Agent-generated outreach will appear here for review before sending.
+                </p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Business</th>
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Score</th>
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Draft subject</th>
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--muted-foreground)' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                  {pendingApprovals.map((lead) => {
+                    const score = lead.business?.overall_score
+                    const scoreColor = getScoreColor(score)
+                    const busy = approving[lead.id]
+                    return (
+                      <tr key={lead.id} style={{ borderColor: 'var(--border)' }}>
+                        <td className="px-4 py-3">
+                          <Link to={`/leads/${lead.id}`} className="block">
+                            <div className="font-medium leading-snug hover:text-[#f97316] transition-colors" style={{ color: 'var(--foreground)' }}>
+                              {lead.business?.name}
+                            </div>
+                            <div className="text-xs mt-0.5 capitalize" style={{ color: 'var(--muted-foreground)' }}>
+                              {lead.business?.place_types?.[0]?.replace(/_/g, ' ')}
+                            </div>
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3">
+                          {score != null ? (
+                            <span className="text-lg font-bold" style={{ color: scoreColor }}>{score}</span>
+                          ) : (
+                            <span style={{ color: 'var(--muted-foreground)' }}>—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 max-w-xs">
+                          <span className="text-xs truncate block" style={{ color: 'var(--muted-foreground)' }}>
+                            {lead.generated_email_subject || '(no subject — outreach not yet generated)'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleApprove(lead.id, true)}
+                              disabled={busy}
+                              className="text-xs font-medium px-3 py-1.5 rounded-lg transition-opacity"
+                              style={{ background: '#f97316', color: '#fff', opacity: busy ? 0.6 : 1 }}
+                            >
+                              {busy ? '…' : 'Approve & Send'}
+                            </button>
+                            <button
+                              onClick={() => handleApprove(lead.id, false)}
+                              disabled={busy}
+                              className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                              style={{ background: 'var(--muted)', color: 'var(--foreground)', border: '1px solid var(--border)', opacity: busy ? 0.6 : 1 }}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => handleReject(lead.id)}
+                              disabled={busy}
+                              className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+                              style={{ color: '#ef4444', background: 'var(--muted)', border: '1px solid var(--border)', opacity: busy ? 0.6 : 1 }}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* ── Pipeline tab ────────────────────────────────────────────────── */}
+        {activeTab === 'pipeline' && <>
 
         {/* Filters */}
         <div className="flex flex-wrap gap-3">
@@ -228,6 +367,8 @@ export default function LeadsPage() {
             </table>
           )}
         </div>
+        </>}
+
       </div>
     </div>
   )

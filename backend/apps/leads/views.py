@@ -24,8 +24,15 @@ class LeadViewSet(viewsets.ModelViewSet):
             return LeadDetailSerializer
         return LeadSerializer
 
+    def perform_create(self, serializer):
+        """Inject workspace and owner when creating a lead directly via POST /leads/."""
+        serializer.save(owner=self.request.user, workspace=self.request.workspace)
+
     def get_queryset(self):
-        qs = super().get_queryset().filter(owner=self.request.user)
+        workspace = self.request.workspace
+        if workspace is None:
+            return super().get_queryset().none()
+        qs = super().get_queryset().filter(workspace=workspace)
         params = self.request.query_params
 
         outreach_status = params.get("status")
@@ -112,6 +119,85 @@ class LeadViewSet(viewsets.ModelViewSet):
         activities = lead.activities.all()
         serializer = LeadActivitySerializer(activities, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=["get"], url_path="pending-approval")
+    def pending_approval(self, request):
+        """Return leads awaiting outreach approval (approval_required=True, approved_at=None)."""
+        workspace = request.workspace
+        if workspace is None:
+            return Response([])
+        qs = (
+            Lead.objects.select_related("business", "business__enrichment", "business__scan")
+            .prefetch_related("business__scores")
+            .filter(workspace=workspace, approval_required=True, approved_at=None)
+            .order_by("-created_at")
+        )
+        serializer = LeadDetailSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path="approve")
+    def approve(self, request, pk=None):
+        """Approve the AI-generated outreach for this lead.
+
+        Body (optional):
+          {"send_now": true}  — immediately send the generated email after approving.
+        """
+        lead = self.get_object()
+        from django.utils import timezone
+
+        lead.approval_required = False
+        lead.approved_at = timezone.now()
+        lead.approved_by = request.user
+        lead.save(update_fields=["approval_required", "approved_at", "approved_by", "updated_at"])
+
+        LeadActivity.objects.create(
+            lead=lead,
+            activity_type=LeadActivity.ActivityType.OUTREACH_APPROVED,
+            description="Outreach approved by user.",
+        )
+
+        if request.data.get("send_now"):
+            try:
+                from apps.leads.services.email_sender import send_lead_email
+                send_lead_email(lead)
+            except Exception as exc:
+                lead.refresh_from_db()
+                serializer = LeadDetailSerializer(lead)
+                return Response(
+                    {"detail": f"Approved but email send failed: {exc}", "lead": serializer.data},
+                    status=status.HTTP_200_OK,
+                )
+
+        lead.refresh_from_db()
+        return Response(LeadDetailSerializer(lead).data)
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject(self, request, pk=None):
+        """Reject AI-generated outreach — clears the draft and resets approval state."""
+        lead = self.get_object()
+
+        lead.approval_required = False
+        lead.approved_at = None
+        lead.generated_email = ""
+        lead.generated_email_subject = ""
+        lead.generated_call_script = ""
+        lead.outreach_generated_at = None
+        lead.outreach_status = Lead.OutreachStatus.NEW
+        lead.save(update_fields=[
+            "approval_required", "approved_at",
+            "generated_email", "generated_email_subject",
+            "generated_call_script", "outreach_generated_at",
+            "outreach_status", "updated_at",
+        ])
+
+        LeadActivity.objects.create(
+            lead=lead,
+            activity_type=LeadActivity.ActivityType.OUTREACH_REJECTED,
+            description="Outreach rejected — draft cleared.",
+        )
+
+        lead.refresh_from_db()
+        return Response(LeadDetailSerializer(lead).data)
 
     @action(detail=False, methods=["post"], url_path="bulk-action")
     def bulk_action(self, request):

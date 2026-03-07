@@ -5,6 +5,7 @@ import { useMapStore } from './mapStore'
 
 export const useLeadStore = create((set, get) => ({
   leads: [],
+  pendingApprovals: [],
   selectedLead: null,
   isLoading: false,
   filters: { status: '', minScore: '', search: '' },
@@ -82,6 +83,29 @@ export const useLeadStore = create((set, get) => ({
     // Only update selectedLead if the user is still on the same lead's page
     set((state) => ({
       selectedLead: state.selectedLead?.id === leadId ? data : state.selectedLead,
+    }))
+    return data
+  },
+
+  fetchPendingApprovals: async () => {
+    const { data } = await leadsApi.pendingApproval()
+    set({ pendingApprovals: data.results ?? data })
+  },
+
+  approveLead: async (id, sendNow = false) => {
+    const { data } = await leadsApi.approve(id, sendNow)
+    set((state) => ({
+      pendingApprovals: state.pendingApprovals.filter((l) => l.id !== id),
+      leads: state.leads.map((l) => (l.id === id ? { ...l, ...data } : l)),
+    }))
+    return data
+  },
+
+  rejectLead: async (id) => {
+    const { data } = await leadsApi.reject(id)
+    set((state) => ({
+      pendingApprovals: state.pendingApprovals.filter((l) => l.id !== id),
+      leads: state.leads.map((l) => (l.id === id ? { ...l, ...data } : l)),
     }))
     return data
   },
