@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { scansApi } from '../api/scans'
 import { SCAN_POLL_INTERVAL_MS, SCAN_TERMINAL_STATUSES } from '../utils/constants'
+import { useMapStore } from './mapStore'
 
 export const useScanStore = create((set, get) => ({
   scans: [],
@@ -62,4 +63,28 @@ export const useScanStore = create((set, get) => ({
   },
 
   setActiveScan: (scan) => set({ activeScan: scan }),
+
+  deleteScan: async (id) => {
+    await scansApi.delete(id)
+    set((state) => {
+      const next = { scans: state.scans.filter((s) => s.id !== id) }
+      if (state.activeScan?.id === id) next.activeScan = null
+      return next
+    })
+  },
+
+  rerunScan: async (id) => {
+    const { data: newScan } = await scansApi.rerun(id)
+    set((state) => ({ scans: [newScan, ...state.scans], activeScan: newScan }))
+    get().startPolling(newScan.id)
+    return newScan
+  },
+
+  loadScanOnMap: (scan) => {
+    const { setSearchCenter, setSearchRadius, loadMarkersForScan } = useMapStore.getState()
+    set({ activeScan: scan })
+    setSearchCenter([parseFloat(scan.center_lng), parseFloat(scan.center_lat)])
+    setSearchRadius(scan.radius_meters)
+    loadMarkersForScan(scan.id)
+  },
 }))
