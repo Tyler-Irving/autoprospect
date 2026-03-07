@@ -4,23 +4,32 @@ import { useScanStore } from '../../store/scanStore'
 import { useMapStore } from '../../store/mapStore'
 import { PLACE_TYPES } from '../../utils/constants'
 
+// Google Places API caps radius at 50,000m (~31 miles)
 const RADIUS_OPTIONS = [
   { value: 1609, label: '1 mile' },
   { value: 4023, label: '2.5 miles' },
   { value: 8047, label: '5 miles' },
   { value: 16093, label: '10 miles' },
   { value: 24140, label: '15 miles' },
+  { value: 40234, label: '25 miles' },
 ]
 
 export default function SearchControls() {
   const { launchScan, isLaunching, activeScan } = useScanStore()
-  const { setSearchCenter, setSearchRadius, loadMarkersForScan, clearMarkers, mapClickCenter, setMapClickCenter } = useMapStore()
+  const {
+    setSearchCenter,
+    setSearchRadius,
+    searchRadiusMeters,
+    loadMarkersForScan,
+    clearMarkers,
+    mapClickCenter,
+    setMapClickCenter,
+  } = useMapStore()
 
   const [location, setLocation] = useState('')
   const [suggestions, setSuggestions] = useState([])
   const [selectedCoords, setSelectedCoords] = useState(null)
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [radius, setRadius] = useState(8047)
   const [selectedTypes, setSelectedTypes] = useState(['plumber'])
   const [keyword, setKeyword] = useState('')
   const [label, setLabel] = useState('')
@@ -116,13 +125,13 @@ export default function SearchControls() {
 
     const [lng, lat] = effectiveCoords
     setSearchCenter([lng, lat])
-    setSearchRadius(radius)
+    setSearchRadius(searchRadiusMeters)
     clearMarkers()
 
     await launchScan({
       center_lat: parseFloat(lat.toFixed(7)),
       center_lng: parseFloat(lng.toFixed(7)),
-      radius_meters: radius,
+      radius_meters: searchRadiusMeters,
       place_types: selectedTypes,
       keyword,
       label: label || `${location} — ${selectedTypes.join(', ')}`,
@@ -203,8 +212,11 @@ export default function SearchControls() {
           Radius
         </label>
         <select
-          value={radius}
-          onChange={(e) => setRadius(Number(e.target.value))}
+          value={searchRadiusMeters}
+          onChange={(e) => {
+            const next = Number(e.target.value)
+            setSearchRadius(next)
+          }}
           className={inputClass}
           style={inputStyle}
         >

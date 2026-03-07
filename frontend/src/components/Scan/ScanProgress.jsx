@@ -53,15 +53,39 @@ export default function ScanProgress() {
         </span>
       </div>
 
-      {/* Progress bar */}
-      <div className="h-1.5 rounded-full overflow-hidden mb-2" style={{ background: 'var(--secondary)' }}>
-        <div
-          className="h-full rounded-full transition-all duration-500"
+      {/* Status pill (replaces progress bar) */}
+      <div className="mb-2">
+        <span
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
           style={{
-            width: `${progress_pct}%`,
-            background: isFailed ? '#ef4444' : status === 'completed' ? '#22c55e' : '#f97316',
+            color: isFailed ? '#fca5a5' : status === 'completed' ? '#86efac' : '#fdba74',
+            background: isFailed
+              ? 'color-mix(in srgb, #ef4444 14%, transparent)'
+              : status === 'completed'
+              ? 'color-mix(in srgb, #22c55e 14%, transparent)'
+              : 'color-mix(in srgb, #f97316 14%, transparent)',
+            border: `1px solid ${
+              isFailed
+                ? 'color-mix(in srgb, #ef4444 34%, transparent)'
+                : status === 'completed'
+                ? 'color-mix(in srgb, #22c55e 34%, transparent)'
+                : 'color-mix(in srgb, #f97316 34%, transparent)'
+            }`,
           }}
-        />
+        >
+          {status === 'completed' ? (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          ) : (
+            <span
+              className="w-2.5 h-2.5 rounded-full border-2 border-current animate-spin"
+              style={{ borderTopColor: 'transparent' }}
+              aria-hidden="true"
+            />
+          )}
+          {status === 'completed' ? 'Done' : isFailed ? 'Stopped' : 'Running'}
+        </span>
       </div>
 
       <p className="text-xs" style={{ color: isFailed ? '#f87171' : 'var(--muted-foreground)' }}>

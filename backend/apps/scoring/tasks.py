@@ -23,14 +23,22 @@ def score_business_tier1(self, business_id: int) -> dict[str, Any]:
         business_id: Primary key of the Business to score.
     """
     try:
-        business = Business.objects.select_related("enrichment", "scan").get(pk=business_id)
+        business = Business.objects.select_related(
+            "enrichment", "scan", "scan__workspace__agent_config"
+        ).get(pk=business_id)
     except Business.DoesNotExist:
         logger.error("score_business_tier1: Business %d not found", business_id)
         return {"error": "Business not found"}
 
     try:
+        agent_config = None
+        try:
+            agent_config = business.scan.workspace.agent_config
+        except AttributeError:
+            pass
+
         scorer = Tier1Scorer()
-        score = scorer.score(business)
+        score = scorer.score(business, agent_config=agent_config)
 
         # Increment scan counter and accumulate cost atomically
         Scan.objects.filter(pk=business.scan_id).update(
@@ -38,6 +46,21 @@ def score_business_tier1(self, business_id: int) -> dict[str, Any]:
             api_cost_cents=F("api_cost_cents") + score.api_cost_cents,
             updated_at=timezone.now(),
         )
+
+        # Self-healing: if this is the last business to score and the scan is
+        # still in scoring_t1, the chord callback may have been dropped (a known
+        # Celery nested-chord race). Finalize explicitly in that case.
+        scan = Scan.objects.get(pk=business.scan_id)
+        if (
+            scan.status == Scan.Status.SCORING_T1
+            and scan.businesses_scored >= scan.businesses_found > 0
+        ):
+            from apps.scans.tasks import finalize_scan
+            logger.info(
+                "score_business_tier1: chord callback missing for scan %d — finalizing directly",
+                scan.pk,
+            )
+            finalize_scan.apply_async(args=([], scan.pk))
 
         return {
             "business_id": business_id,
@@ -60,14 +83,22 @@ def score_business_tier2(self, business_id: int) -> dict[str, Any]:
         business_id: Primary key of the Business to score.
     """
     try:
-        business = Business.objects.select_related("enrichment", "scan").prefetch_related("scores").get(pk=business_id)
+        business = Business.objects.select_related(
+            "enrichment", "scan", "scan__workspace__agent_config"
+        ).prefetch_related("scores").get(pk=business_id)
     except Business.DoesNotExist:
         logger.error("score_business_tier2: Business %d not found", business_id)
         return {"error": "Business not found"}
 
     try:
+        agent_config = None
+        try:
+            agent_config = business.scan.workspace.agent_config
+        except AttributeError:
+            pass
+
         scorer = Tier2Scorer()
-        score = scorer.score(business)
+        score = scorer.score(business, agent_config=agent_config)
 
         # Accumulate cost on the parent scan atomically
         Scan.objects.filter(pk=business.scan_id).update(

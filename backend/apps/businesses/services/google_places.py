@@ -147,7 +147,7 @@ class GooglePlacesService:
             "locationRestriction": {
                 "circle": {
                     "center": {"latitude": lat, "longitude": lng},
-                    "radius": float(radius_meters),
+                    "radius": float(min(radius_meters, 50000)),
                 }
             },
             "maxResultCount": min(max_results, 20),

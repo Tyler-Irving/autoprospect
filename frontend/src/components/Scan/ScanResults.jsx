@@ -17,10 +17,10 @@ export default function ScanResults({ promoting, promoted, onPromote }) {
   const medCount = markers.filter((m) => m.overall_score >= 40 && m.overall_score < 70).length
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 mt-4 gap-3">
+    <div className="mt-4 flex flex-col gap-3">
 
       {/* Summary */}
-      <div className="flex items-baseline justify-between shrink-0">
+      <div className="flex items-baseline justify-between">
         <span className="text-xs font-semibold" style={{ color: 'var(--foreground)' }}>{markers.length} businesses</span>
         <div className="flex gap-2 text-[10px]">
           {highCount > 0 && <span className="text-green-400 font-medium">{highCount} high</span>}
@@ -28,8 +28,8 @@ export default function ScanResults({ promoting, promoted, onPromote }) {
         </div>
       </div>
 
-      {/* Scrollable list — fills all remaining panel height */}
-      <div className="flex-1 overflow-y-auto flex flex-col gap-1 pr-0.5">
+      {/* Business list */}
+      <div className="flex flex-col gap-1 pr-0.5">
         {sorted.map((business) => {
           const score = business.overall_score
           const scoreColor = getScoreColor(score)
