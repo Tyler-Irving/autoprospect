@@ -31,5 +31,5 @@ export const useMapStore = create((set) => ({
     }
   },
 
-  clearMarkers: () => set({ markers: [], selectedBusiness: null }),
+  clearMarkers: () => set({ markers: [], selectedBusiness: null, hoveredBusiness: null, hoverPosition: null }),
 }))

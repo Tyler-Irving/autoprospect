@@ -165,9 +165,9 @@ export default function BusinessHoverCard() {
             <div className="border-t border-slate-800" />
             <div className="px-4 py-2.5">
               <div className="flex flex-wrap gap-1">
-                {score.key_signals.map((signal, i) => (
+                {score.key_signals.map((signal) => (
                   <span
-                    key={i}
+                    key={signal}
                     className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/60"
                   >
                     {signal}

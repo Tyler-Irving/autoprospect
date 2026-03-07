@@ -84,6 +84,13 @@ export default function MapView() {
     } else {
       map.once('style.load', apply)
     }
+
+    // Cancel a pending style.load listener if this effect re-runs before it fires.
+    // Without this, two listeners stack up and addSource/addLayer runs twice,
+    // causing a Mapbox "source already exists" error.
+    return () => {
+      map.off('style.load', apply)
+    }
   }, [searchCenter, searchRadiusMeters])
 
   // Render business markers
@@ -91,7 +98,10 @@ export default function MapView() {
     const map = mapRef.current
     if (!map) return
 
-    // Clear existing markers
+    // Clear stale hover state before removing old markers so the hover card
+    // doesn't stay visible if the user was hovering when markers refreshed.
+    setHoveredBusiness(null, null)
+
     markersRef.current.forEach((m) => m.remove())
     markersRef.current = []
 
