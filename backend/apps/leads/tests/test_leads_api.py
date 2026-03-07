@@ -1,6 +1,7 @@
 """Tests for leads API — promote, CRUD, dashboard stats."""
 import pytest
 from django.urls import reverse
+from unittest.mock import patch
 from rest_framework.test import APIClient
 
 
@@ -39,6 +40,28 @@ class TestPromoteEndpoint:
         assert resp.status_code == 200
         assert resp.data["already_lead"] is True
 
+    def test_promote_sets_tier2_pending_and_queues_task(self):
+        _, business = _create_scan_and_business()
+        client = APIClient()
+        with patch("apps.scoring.tasks.score_business_tier2.delay") as mock_delay:
+            resp = client.post(f"/api/businesses/{business.pk}/promote/")
+        assert resp.status_code == 201
+        business.refresh_from_db()
+        assert business.tier2_pending is True
+        mock_delay.assert_called_once_with(business.pk)
+
+    def test_promote_copies_contact_email_from_enrichment(self):
+        _, business = _create_scan_and_business()
+        from apps.enrichment.models import EnrichmentProfile
+        from apps.leads.models import Lead
+
+        EnrichmentProfile.objects.create(business=business, contact_email="owner@biz.com")
+        client = APIClient()
+        resp = client.post(f"/api/businesses/{business.pk}/promote/")
+        assert resp.status_code == 201
+        lead = Lead.objects.get(pk=resp.data["lead_id"])
+        assert lead.contact_email == "owner@biz.com"
+
 
 @pytest.mark.django_db
 class TestLeadsAPI:
@@ -52,11 +75,12 @@ class TestLeadsAPI:
     def test_list_leads(self):
         _, business = _create_scan_and_business()
         client = APIClient()
-        client.post("/api/leads/", {"business_id": business.pk})
+        created = client.post("/api/leads/", {"business_id": business.pk})
         resp = client.get("/api/leads/")
         assert resp.status_code == 200
         results = resp.data.get("results", resp.data)
-        assert len(results) >= 1
+        assert len(results) == 1
+        assert results[0]["id"] == created.data["id"]
 
     def test_patch_status_creates_activity(self):
         _, business = _create_scan_and_business()
@@ -83,6 +107,26 @@ class TestLeadsAPI:
         assert detail.status_code == 200
         assert "enrichment" in detail.data["business"]
         assert detail.data["business"]["enrichment"]["website_reachable"] is True
+
+    def test_generate_outreach_returns_500_on_failure(self):
+        _, business = _create_scan_and_business()
+        client = APIClient()
+        lead_resp = client.post("/api/leads/", {"business_id": business.pk})
+        lead_id = lead_resp.data["id"]
+
+        with patch("apps.leads.tasks.run_outreach_generation", side_effect=RuntimeError("boom")):
+            resp = client.post(f"/api/leads/{lead_id}/generate-outreach/")
+        assert resp.status_code == 500
+
+    def test_send_email_maps_value_error_to_400(self):
+        _, business = _create_scan_and_business()
+        client = APIClient()
+        lead_resp = client.post("/api/leads/", {"business_id": business.pk})
+        lead_id = lead_resp.data["id"]
+
+        with patch("apps.leads.services.email_sender.send_lead_email", side_effect=ValueError("bad input")):
+            resp = client.post(f"/api/leads/{lead_id}/send-email/")
+        assert resp.status_code == 400
 
 
 @pytest.mark.django_db

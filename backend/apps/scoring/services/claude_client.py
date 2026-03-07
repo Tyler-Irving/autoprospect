@@ -42,10 +42,17 @@ class ClaudeClient:
             model=MODEL,
             max_tokens=max_tokens,
             system=system,
-            messages=[{"role": "user", "content": user}],
+            messages=[
+                {"role": "user", "content": user},
+                # Prefill the assistant turn with "{" so Claude is forced to
+                # complete a JSON object rather than risk adding preamble or
+                # producing unescaped quotes inside string values.
+                {"role": "assistant", "content": "{"},
+            ],
         )
 
-        raw = message.content[0].text
+        # Prepend the "{" we sent as the prefill — the completion is the rest.
+        raw = "{" + message.content[0].text
         prompt_tokens = message.usage.input_tokens
         completion_tokens = message.usage.output_tokens
         cost_cents = self._calc_cost(prompt_tokens, completion_tokens)

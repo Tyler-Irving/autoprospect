@@ -21,6 +21,7 @@ class Business(models.Model):
     opening_hours = models.JSONField(default=dict)
     reviews_data = models.JSONField(default=list)
     scan = models.ForeignKey("scans.Scan", on_delete=models.CASCADE, related_name="businesses")
+    tier2_pending = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -13,6 +13,7 @@ class EnrichmentInlineSerializer(serializers.ModelSerializer):
     class Meta:
         model = EnrichmentProfile
         fields = [
+            "contact_email",
             "website_reachable",
             "website_title",
             "website_platform",
@@ -110,6 +111,29 @@ class Tier1ScoreSummarySerializer(serializers.ModelSerializer):
         ]
 
 
+class Tier2ScoreSummarySerializer(serializers.ModelSerializer):
+    """Tier-2 deep-analysis score data — includes dossier and competitor analysis."""
+
+    class Meta:
+        model = AutomationScore
+        fields = [
+            "overall_score",
+            "confidence",
+            "crm_score",
+            "scheduling_score",
+            "marketing_score",
+            "invoicing_score",
+            "key_signals",
+            "summary",
+            "recommended_pitch_angle",
+            "estimated_deal_value",
+            "full_dossier",
+            "competitor_analysis",
+            "api_cost_cents",
+            "scored_at",
+        ]
+
+
 class MapMarkerSerializer(serializers.ModelSerializer):
     """Marker data for the map — includes enough for a rich hover card."""
 
@@ -117,6 +141,7 @@ class MapMarkerSerializer(serializers.ModelSerializer):
     has_lead = serializers.ReadOnlyField()
     category = serializers.SerializerMethodField()
     tier1_score = serializers.SerializerMethodField()
+    contact_email = serializers.SerializerMethodField()
 
     class Meta:
         model = Business
@@ -135,6 +160,7 @@ class MapMarkerSerializer(serializers.ModelSerializer):
             "formatted_address",
             "business_status",
             "tier1_score",
+            "contact_email",
         ]
 
     def get_category(self, obj) -> str:
@@ -148,12 +174,18 @@ class MapMarkerSerializer(serializers.ModelSerializer):
             return None
         return Tier1ScoreSummarySerializer(max(tier1, key=lambda s: s.scored_at)).data
 
+    def get_contact_email(self, obj) -> str:
+        """Return the email extracted from the business website, if any."""
+        enrichment = getattr(obj, "enrichment", None)
+        return enrichment.contact_email if enrichment else ""
+
 
 class BusinessForLeadSerializer(serializers.ModelSerializer):
-    """Business data for lead detail view — includes enrichment and tier1 score."""
+    """Business data for lead detail view — includes enrichment, tier1, and tier2 scores."""
 
     overall_score = serializers.ReadOnlyField()
     tier1_score = serializers.SerializerMethodField()
+    tier2_score = serializers.SerializerMethodField()
     enrichment = EnrichmentInlineSerializer(read_only=True)
 
     class Meta:
@@ -170,15 +202,25 @@ class BusinessForLeadSerializer(serializers.ModelSerializer):
             "google_maps_url",
             "business_status",
             "overall_score",
+            "tier2_pending",
             "tier1_score",
+            "tier2_score",
             "enrichment",
         ]
 
     def get_tier1_score(self, obj) -> dict | None:
+        """Return the most recent Tier 1 score if available."""
         tier1 = [s for s in obj.scores.all() if s.tier == "tier1"]
         if not tier1:
             return None
         return Tier1ScoreSummarySerializer(max(tier1, key=lambda s: s.scored_at)).data
+
+    def get_tier2_score(self, obj) -> dict | None:
+        """Return the most recent Tier 2 score if available."""
+        tier2 = [s for s in obj.scores.all() if s.tier == "tier2"]
+        if not tier2:
+            return None
+        return Tier2ScoreSummarySerializer(max(tier2, key=lambda s: s.scored_at)).data
 
 
 class BusinessDetailSerializer(serializers.ModelSerializer):

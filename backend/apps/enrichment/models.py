@@ -47,6 +47,9 @@ class EnrichmentProfile(models.Model):
     linkedin_url = models.URLField(max_length=1024, blank=True)
     yelp_url = models.URLField(max_length=1024, blank=True)
 
+    # Contact
+    contact_email = models.EmailField(blank=True)
+
     # Review signals
     review_summary = models.TextField(blank=True)
     negative_signals = models.JSONField(default=list)

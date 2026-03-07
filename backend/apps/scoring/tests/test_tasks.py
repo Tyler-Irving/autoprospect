@@ -122,3 +122,71 @@ class TestScoreBusinessTier1:
         biz2.scan.refresh_from_db()
         assert biz1.scan.api_cost_cents == 5
         assert biz2.scan.api_cost_cents == 3
+
+
+@pytest.mark.django_db
+class TestScoreBusinessTier2:
+    def _make_business_with_lead(self, suffix="T2"):
+        from apps.businesses.models import Business
+        from apps.leads.models import Lead
+        from apps.scans.models import Scan
+
+        scan = Scan.objects.create(center_lat="34.0522", center_lng="-118.2437", radius_meters=8000)
+        business = Business.objects.create(
+            google_place_id=f"place_score_t2_{suffix}",
+            name="Score T2 Biz",
+            latitude="34.05",
+            longitude="-118.24",
+            scan=scan,
+            tier2_pending=True,
+        )
+        lead = Lead.objects.create(business=business)
+        return business, scan, lead
+
+    def _mock_tier2_score(self, overall_score=88, api_cost_cents=17):
+        score = MagicMock()
+        score.overall_score = overall_score
+        score.api_cost_cents = api_cost_cents
+        return score
+
+    def test_nonexistent_business_returns_error(self):
+        from apps.scoring.tasks import score_business_tier2
+
+        result = score_business_tier2(99999)
+        assert result == {"error": "Business not found"}
+
+    def test_success_clears_pending_and_logs_activity_and_cost(self):
+        from apps.leads.models import LeadActivity
+        from apps.scoring.tasks import score_business_tier2
+
+        biz, scan, lead = self._make_business_with_lead("S1")
+        with patch("apps.scoring.tasks.Tier2Scorer") as MockScorer:
+            MockScorer.return_value.score.return_value = self._mock_tier2_score(91, 23)
+            result = score_business_tier2(biz.pk)
+
+        biz.refresh_from_db()
+        scan.refresh_from_db()
+        assert result["overall_score"] == 91
+        assert result["api_cost_cents"] == 23
+        assert biz.tier2_pending is False
+        assert scan.api_cost_cents == 23
+        assert LeadActivity.objects.filter(
+            lead=lead,
+            activity_type=LeadActivity.ActivityType.TIER2_REQUESTED,
+        ).exists()
+
+    def test_final_retry_clears_pending(self):
+        from apps.scoring.tasks import score_business_tier2
+
+        biz, _, _ = self._make_business_with_lead("S2")
+        with patch("apps.scoring.tasks.Tier2Scorer") as MockScorer, \
+             patch.object(score_business_tier2, "retry", side_effect=RuntimeError("retry")), \
+             patch.object(score_business_tier2, "max_retries", 0):
+            MockScorer.return_value.score.side_effect = RuntimeError("boom")
+            try:
+                score_business_tier2(biz.pk)
+            except RuntimeError:
+                pass
+
+        biz.refresh_from_db()
+        assert biz.tier2_pending is False

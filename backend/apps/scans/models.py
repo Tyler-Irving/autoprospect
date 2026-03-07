@@ -1,4 +1,5 @@
 """Scan model — represents a single area prospecting job."""
+from django.conf import settings
 from django.db import models
 
 
@@ -35,6 +36,44 @@ class Scan(models.Model):
 
     def __str__(self) -> str:
         return self.label or f"Scan #{self.pk} ({self.status})"
+
+
+class SiteConfig(models.Model):
+    """Singleton model for user-editable application settings.
+
+    Always access via SiteConfig.get() — never create more than one row.
+    """
+
+    monthly_budget_cents = models.PositiveIntegerField(
+        default=0,
+        help_text="Monthly Claude API budget in cents (0 = use env default).",
+    )
+    max_businesses_per_scan = models.PositiveIntegerField(
+        default=0,
+        help_text="Max businesses per scan (0 = use env default).",
+    )
+
+    class Meta:
+        verbose_name = "Site Config"
+
+    def __str__(self) -> str:
+        return "Site Configuration"
+
+    @classmethod
+    def get(cls) -> "SiteConfig":
+        """Return the singleton config row, creating it if it doesn't exist."""
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    @property
+    def effective_monthly_budget_cents(self) -> int:
+        """Return the active budget, falling back to the env value."""
+        return self.monthly_budget_cents or settings.MONTHLY_API_BUDGET_CENTS
+
+    @property
+    def effective_max_businesses(self) -> int:
+        """Return the active max businesses, falling back to the env value."""
+        return self.max_businesses_per_scan or settings.MAX_BUSINESSES_PER_SCAN
 
     @property
     def progress_pct(self) -> int:

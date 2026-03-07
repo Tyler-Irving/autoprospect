@@ -10,11 +10,65 @@ from rest_framework.response import Response
 
 from apps.businesses.serializers import BusinessListSerializer
 
-from .models import Scan
+from .models import Scan, SiteConfig
 from .serializers import ScanSerializer
 from .tasks import run_scan
 
 logger = logging.getLogger(__name__)
+
+
+def _mask(key: str) -> str:
+    """Return a masked version of an API key for safe display."""
+    if not key:
+        return ""
+    visible = key[:6]
+    return f"{visible}{'•' * min(len(key) - 6, 20)}"
+
+
+@api_view(["GET", "PATCH"])
+def site_settings(request):
+    """Read or update application settings.
+
+    GET  — returns config values (API keys masked, editable fields).
+    PATCH — updates monthly_budget_cents and/or max_businesses_per_scan.
+    """
+    from django.conf import settings as django_settings
+
+    config = SiteConfig.get()
+
+    if request.method == "PATCH":
+        data = request.data
+        if "monthly_budget_cents" in data:
+            try:
+                config.monthly_budget_cents = max(0, int(data["monthly_budget_cents"]))
+            except (TypeError, ValueError):
+                return Response({"detail": "monthly_budget_cents must be an integer."}, status=400)
+        if "max_businesses_per_scan" in data:
+            try:
+                config.max_businesses_per_scan = max(0, int(data["max_businesses_per_scan"]))
+            except (TypeError, ValueError):
+                return Response({"detail": "max_businesses_per_scan must be an integer."}, status=400)
+        config.save()
+
+    google_key = django_settings.GOOGLE_PLACES_API_KEY
+    anthropic_key = django_settings.ANTHROPIC_API_KEY
+    resend_key = django_settings.ANYMAIL.get("RESEND_API_KEY", "")
+
+    return Response({
+        # Editable config
+        "monthly_budget_cents": config.effective_monthly_budget_cents,
+        "max_businesses_per_scan": config.effective_max_businesses,
+        # API keys — masked, read-only
+        "google_places_key_set": bool(google_key),
+        "google_places_key_masked": _mask(google_key),
+        "anthropic_key_set": bool(anthropic_key),
+        "anthropic_key_masked": _mask(anthropic_key),
+        "resend_key_set": bool(resend_key),
+        "resend_key_masked": _mask(resend_key),
+        # Email config — read-only
+        "email_from": django_settings.DEFAULT_FROM_EMAIL,
+        "email_reply_to": django_settings.EMAIL_REPLY_TO,
+    })
 
 
 @api_view(["GET"])

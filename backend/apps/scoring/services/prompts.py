@@ -31,6 +31,87 @@ RESPOND WITH ONLY valid JSON matching this exact shape (no preamble, no markdown
 }"""
 
 
+TIER2_SYSTEM = """You are a senior automation sales intelligence analyst producing deep-dive dossiers on local businesses.
+
+You score businesses on their need for 4 automation categories:
+- CRM: lead tracking, follow-ups, customer relationship management
+- Scheduling: online booking, appointment management, calendar automation
+- Marketing: email campaigns, social media automation, review management
+- Invoicing: digital invoicing, payment processing, quote generation
+
+SCORING RUBRIC:
+HIGH (70-100): No tools detected, obviously manual processes, reviews mention pain points like slow response, missed follow-ups, scheduling issues. Ideal target.
+MEDIUM (40-69): Some tools present but gaps remain, partial automation, room for improvement.
+LOW (0-39): Already well automated, too small/inactive, or not a good fit.
+
+Your full_dossier must cover ALL of the following in multi-paragraph prose:
+1. Current operational state — how this business likely runs today based on all signals
+2. Automation gap analysis — specific gaps in CRM, scheduling, marketing, and invoicing
+3. Tool recommendations — name real tools by name (e.g., ServiceTitan, Jobber, Housecall Pro, HubSpot, ActiveCampaign, Calendly, Acuity, Square, Stripe, QuickBooks) with rationale for each
+4. Implementation roadmap — phased approach (what to fix first, second, third) with rough timelines
+5. ROI argument — quantifiable business impact in time saved, leads captured, revenue recovered
+6. Objection rebuttals — 2-3 anticipated objections and how to counter them
+
+Your competitor_analysis must cover: how similar local businesses in this market segment and geography typically compare on automation adoption, what best-in-class operators in this space use, and where this specific business ranks relative to peers.
+
+RESPOND WITH ONLY valid JSON matching this exact shape (no preamble, no markdown):
+{
+  "overall_score": <0-100 integer>,
+  "confidence": <0.0-1.0 float>,
+  "crm_score": <0-100 integer>,
+  "scheduling_score": <0-100 integer>,
+  "marketing_score": <0-100 integer>,
+  "invoicing_score": <0-100 integer>,
+  "key_signals": [<up to 6 short signal strings>],
+  "summary": "<2-3 sentence summary of automation readiness>",
+  "recommended_pitch_angle": "<1-2 sentences on best approach>",
+  "estimated_deal_value": "<low|medium|high|enterprise>",
+  "full_dossier": "<multi-paragraph deep-dive prose covering all 6 sections above>",
+  "competitor_analysis": "<paragraph on how this business compares to similar local peers on automation adoption>"
+}"""
+
+
+def build_tier2_prompt(business: Any, enrichment: Any, tier1_score: Any) -> str:
+    """Build the user message for Tier 2 deep-analysis scoring.
+
+    Includes all Tier 1 context plus a section surfacing the existing Tier 1
+    assessment so Claude can produce a deeper dossier without re-deriving basics.
+
+    Args:
+        business: Business model instance.
+        enrichment: EnrichmentProfile model instance (may have None fields).
+        tier1_score: AutomationScore instance for tier1, or None if unavailable.
+
+    Returns:
+        Formatted user prompt string.
+    """
+    # Build the base context identical to Tier 1
+    base = build_tier1_prompt(business, enrichment)
+
+    lines = [base, ""]
+
+    if tier1_score is not None:
+        t = tier1_score
+        lines += [
+            "=== EXISTING TIER 1 ASSESSMENT ===",
+            f"Overall score: {t.overall_score}/100",
+            f"CRM score: {t.crm_score}",
+            f"Scheduling score: {t.scheduling_score}",
+            f"Marketing score: {t.marketing_score}",
+            f"Invoicing score: {t.invoicing_score}",
+            f"Estimated deal value: {t.estimated_deal_value}",
+            f"Key signals: {', '.join(t.key_signals or [])}",
+            f"Summary: {t.summary or 'none'}",
+            f"Recommended pitch angle: {t.recommended_pitch_angle or 'none'}",
+            "",
+            "Use the above Tier 1 assessment as a starting point. Go deeper — produce the full dossier and competitor analysis as described in your instructions.",
+        ]
+    else:
+        lines.append("(No prior Tier 1 assessment available — derive all scores from raw data.)")
+
+    return "\n".join(lines)
+
+
 def build_tier1_prompt(business: Any, enrichment: Any) -> str:
     """Build the user message for Tier 1 scoring.
 

@@ -15,3 +15,10 @@ GOOGLE_PLACES_API_KEY = "test-key"
 ANTHROPIC_API_KEY = "test-key"
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
+# Keep tests self-contained without requiring Redis.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    }
+}

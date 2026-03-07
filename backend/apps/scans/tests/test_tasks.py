@@ -105,6 +105,22 @@ class TestRunScan:
             result = run_scan(scan.pk)
         assert result["scan_id"] == scan.pk
 
+    def test_skipped_enrichment_increments_counter(self):
+        scan = _make_scan()
+        b1 = _make_business(scan, "K1")
+        b2 = _make_business(scan, "K2")
+
+        with patch("apps.scans.tasks._run_discovery", return_value=[b1.pk, b2.pk]), \
+             patch("apps.scans.tasks._filter_needs_enrichment", return_value=[b1.pk]), \
+             patch("apps.enrichment.tasks.enrich_business.s"), \
+             patch("apps.scans.tasks.start_scoring.s"), \
+             patch("apps.scans.tasks.chord") as mock_chord:
+            mock_chord.return_value.delay.return_value = None
+            run_scan(scan.pk)
+
+        scan.refresh_from_db()
+        assert scan.businesses_enriched == 1
+
 
 # ---------------------------------------------------------------------------
 # start_scoring
@@ -141,6 +157,21 @@ class TestStartScoring:
             result = start_scoring([], scan.pk, [biz1.pk, biz2.pk])
 
         assert result["scoring_started"] == 2
+
+    def test_skipped_scoring_increments_counter(self):
+        scan = _make_scan()
+        b1 = _make_business(scan, "S4")
+        b2 = _make_business(scan, "S5")
+
+        with patch("apps.scans.tasks._filter_needs_scoring", return_value=[b1.pk]), \
+             patch("apps.scoring.tasks.score_business_tier1.s"), \
+             patch("apps.scans.tasks.finalize_scan.s"), \
+             patch("apps.scans.tasks.chord") as mock_chord:
+            mock_chord.return_value.delay.return_value = None
+            start_scoring([], scan.pk, [b1.pk, b2.pk])
+
+        scan.refresh_from_db()
+        assert scan.businesses_scored == 1
 
 
 # ---------------------------------------------------------------------------

@@ -144,22 +144,84 @@ class BusinessViewSet(viewsets.ReadOnlyModelViewSet):
         """Promote a business to an active lead."""
         from apps.leads.models import Lead, LeadActivity
 
+        from apps.scoring.tasks import score_business_tier2
+
         business = self.get_object()
         if hasattr(business, "lead"):
             return Response({"lead_id": business.lead.id, "already_lead": True})
 
         lead = Lead.objects.create(business=business)
+
+        # Auto-populate contact email from enrichment crawl if available
+        enrichment = getattr(business, "enrichment", None)
+        if enrichment and enrichment.contact_email:
+            lead.contact_email = enrichment.contact_email
+            lead.save(update_fields=["contact_email"])
+
         LeadActivity.objects.create(
             lead=lead,
             activity_type=LeadActivity.ActivityType.STATUS_CHANGE,
             description="Promoted to lead from map",
         )
+
+        # Mark tier2 as pending and queue the background task
+        business.tier2_pending = True
+        business.save(update_fields=["tier2_pending"])
+        score_business_tier2.delay(business.pk)
+
         return Response({"lead_id": lead.id, "already_lead": False}, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"], url_path="enrich-tier2")
     def enrich_tier2(self, request, pk=None):
-        """Trigger Tier 2 deep scoring for a business (manual action)."""
-        return Response(
-            {"detail": "Tier 2 scoring not yet implemented (Phase 5)."},
-            status=status.HTTP_501_NOT_IMPLEMENTED,
+        """Trigger Tier 2 deep analysis scoring for a business (manual action).
+
+        The business must already be promoted to a lead before Tier 2 can run.
+        Runs synchronously — may take several seconds due to Claude API call.
+
+        Returns:
+            Serialized Tier2ScoreSummarySerializer data on success.
+            400 if the business has no associated lead.
+            500 if the Claude scoring call fails.
+        """
+        from django.db.models import F
+
+        from apps.leads.models import LeadActivity
+        from apps.scans.models import Scan
+        from apps.scoring.services.tier2_scorer import Tier2Scorer
+
+        from .serializers import Tier2ScoreSummarySerializer
+
+        business = self.get_object()
+
+        if not hasattr(business, "lead"):
+            return Response(
+                {"detail": "Business must be promoted to a lead before running deep analysis."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            score = Tier2Scorer().score(business)
+        except Exception as exc:
+            logger.error(
+                "Tier 2 scoring failed for business %d (%s): %s",
+                business.pk,
+                business.name,
+                exc,
+            )
+            return Response(
+                {"detail": f"Tier 2 scoring failed: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Accumulate API cost on the parent scan using an atomic F() update
+        Scan.objects.filter(pk=business.scan_id).update(
+            api_cost_cents=F("api_cost_cents") + score.api_cost_cents
         )
+
+        LeadActivity.objects.create(
+            lead=business.lead,
+            activity_type=LeadActivity.ActivityType.TIER2_REQUESTED,
+            description=f"Deep analysis completed — score {score.overall_score}/100",
+        )
+
+        return Response(Tier2ScoreSummarySerializer(score).data)

@@ -20,18 +20,16 @@ class TestClaudeClient:
 
     def test_parses_clean_json(self):
         client = self._client()
-        payload = '{"overall_score": 75, "summary": "test"}'
+        payload = '"overall_score": 75, "summary": "test"}'
         client._client.messages.create.return_value = _mock_message(payload)
         result = client.complete("sys", "user")
         assert result["overall_score"] == 75
         assert "model_used" in result
         assert "api_cost_cents" in result
 
-    def test_strips_markdown_fences(self):
-        client = self._client()
+    def test_extract_json_strips_markdown_fences(self):
         payload = '```json\n{"overall_score": 50}\n```'
-        client._client.messages.create.return_value = _mock_message(payload)
-        result = client.complete("sys", "user")
+        result = ClaudeClient._extract_json(payload)
         assert result["overall_score"] == 50
 
     def test_raises_on_invalid_json(self):
@@ -53,7 +51,7 @@ class TestClaudeClient:
 
     def test_metadata_keys_added(self):
         client = self._client()
-        client._client.messages.create.return_value = _mock_message('{"x": 1}', 200, 100)
+        client._client.messages.create.return_value = _mock_message('"x": 1}', 200, 100)
         result = client.complete("sys", "user")
         assert result["model_used"] is not None
         assert result["prompt_tokens"] == 200

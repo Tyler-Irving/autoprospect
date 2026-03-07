@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any
 
@@ -72,6 +73,7 @@ class WebsiteCrawler:
         title = self._get_title(soup)
         description = self._get_meta(soup, "description")
         is_mobile_responsive = self._check_mobile_responsive(soup)
+        contact_email = self._extract_contact_email(soup)
         # Must come last — decomposes head/script/style tags
         text_content = self._get_text_content(soup)
 
@@ -101,6 +103,7 @@ class WebsiteCrawler:
         negative_signals, positive_signals = extract_review_signals(reviews)
 
         return {
+            "contact_email": contact_email,
             "website_reachable": True,
             "website_title": title[:512],
             "website_description": description,
@@ -132,6 +135,7 @@ class WebsiteCrawler:
 
     def _empty_result(self, reachable: bool = False) -> dict[str, Any]:
         return {
+            "contact_email": "",
             "website_reachable": reachable,
             "website_title": "",
             "website_description": "",
@@ -169,12 +173,27 @@ class WebsiteCrawler:
             return tag["content"]
         return ""
 
+    # Prefixes that indicate a generic/automated inbox — not useful for outreach
+    _EMAIL_NOISE = re.compile(
+        r"^(noreply|no-reply|donotreply|do-not-reply|privacy|webmaster|postmaster|bounce|mailer-daemon|unsubscribe)@",
+        re.IGNORECASE,
+    )
+
+    def _extract_contact_email(self, soup: BeautifulSoup) -> str:
+        """Return the first human-contact email found in mailto: links, or ''."""
+        for tag in soup.find_all("a", href=re.compile(r"^mailto:", re.IGNORECASE)):
+            href = tag["href"]
+            # Strip 'mailto:' and any query params (e.g. ?subject=...)
+            raw = href[7:].split("?")[0].strip().lower()
+            if raw and "@" in raw and not self._EMAIL_NOISE.match(raw):
+                return raw
+        return ""
+
     def _get_text_content(self, soup: BeautifulSoup) -> str:
         for tag in soup(["script", "style", "nav", "footer", "head"]):
             tag.decompose()
         text = soup.get_text(separator=" ", strip=True)
         # Collapse whitespace and strip any residual NUL bytes
-        import re
         text = re.sub(r"\s+", " ", text).replace("\x00", "")
         return text[:MAX_TEXT_LENGTH]
 
